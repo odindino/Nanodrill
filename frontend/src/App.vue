@@ -1,26 +1,29 @@
 // App.vue
 <template>
   <div class="app-container">
-    <SideBar @menu-item-clicked="handleMenuItemClick" />
-    
-    <div class="main-content">
-      <transition name="slide">
-        <FileSelector 
-          v-if="showFileSelector" 
-          @close="hideFileSelector"
-        />
-      </transition>
+    <div class="main-layout">
+      <SideBar @menu-item-clicked="handleMenuItemClick" />
       
-      <main class="content-area">
-        <!-- 主要內容區域，將根據選擇的檔案顯示資料分析視圖 -->
-        <div v-if="!selectedFile" class="welcome-screen">
-          <h2>歡迎使用 SPM 數據分析工具</h2>
-          <p>請從左側功能欄選擇「資料集」以開始</p>
-        </div>
+      <div class="content-wrapper">
+        <transition name="slide">
+          <FileSelector 
+            v-if="showFileSelector" 
+            @close="hideFileSelector"
+            class="file-selector-panel"
+          />
+        </transition>
         
-        <!-- 選擇檔案後的內容 -->
-        <DataView v-else />
-      </main>
+        <main class="content-area" :class="{ 'with-selector': showFileSelector }">
+          <!-- 主要內容區域，將根據選擇的檔案顯示資料分析視圖 -->
+          <div v-if="!selectedFile" class="welcome-screen">
+            <h2>歡迎使用 SPM 數據分析工具</h2>
+            <p>請從左側功能欄選擇「資料集」以開始</p>
+          </div>
+          
+          <!-- 選擇檔案後的內容 -->
+          <DataView v-else />
+        </main>
+      </div>
     </div>
     
     <footer class="app-footer">
@@ -93,16 +96,34 @@ body {
   min-height: 100vh;
 }
 
-.main-content {
+.main-layout {
+  display: flex;
+  flex: 1;
+  position: relative;
+}
+
+.content-wrapper {
   flex: 1;
   display: flex;
   position: relative;
+  overflow: hidden; /* 防止選擇器超出視窗範圍 */
+}
+
+.file-selector-panel {
+  position: relative;
+  height: calc(100vh - 40px); /* 減去頁尾高度 */
+  z-index: 10;
 }
 
 .content-area {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+  transition: margin-left 0.3s ease;
+}
+
+.content-area.with-selector {
+  margin-left: 0; /* 當選擇器顯示時不需要額外邊距 */
 }
 
 .welcome-screen {
@@ -131,6 +152,7 @@ body {
   padding: 12px;
   font-size: 14px;
   border-top: 1px solid #ddd;
+  height: 40px; /* 固定頁尾高度 */
 }
 
 /* 側欄和文件選擇器的過渡動畫 */
