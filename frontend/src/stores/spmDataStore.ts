@@ -1,7 +1,7 @@
 // src/stores/spmDataStore.ts
 import { defineStore } from 'pinia';
 
-interface FileInfo {
+export interface FileInfo {
   name: string;
   path: string;
   type: string;
@@ -11,11 +11,11 @@ interface FileInfo {
   hasDatFile?: boolean;
 }
 
-interface TxtParameters {
+export interface TxtParameters {
   [key: string]: any;
 }
 
-interface FileContent {
+export interface FileContent {
   content: string;
   parameters: TxtParameters;
   relatedFiles: FileInfo[];
@@ -28,7 +28,8 @@ export const useSpmDataStore = defineStore('spmData', {
     selectedFile: null as FileInfo | null,
     fileContents: {} as Record<string, FileContent>,
     loading: false,
-    error: ''
+    error: '',
+    currentView: 'welcome' as 'welcome' | 'data-view' | 'analysis'
   }),
   
   getters: {
@@ -47,42 +48,17 @@ export const useSpmDataStore = defineStore('spmData', {
     },
     
     setFiles(files: FileInfo[]) {
-      // 處理檔案列表，標記哪些 txt 檔案有對應的 dat 檔案
-      const datFileNumbers = new Set<number>();
-      
-      files.forEach(file => {
-        if (file.type === 'dat') {
-          datFileNumbers.add(file.number);
-        }
-      });
-      
-      this.files = files.map(file => ({
-        ...file,
-        hasDatFile: file.type === 'txt' && datFileNumbers.has(file.number)
-      }));
+      this.files = files;
     },
-    // setFiles(files: FileInfo[]) {
-    //     // 找出所有 It_to_PC_Matrix.dat 檔案的編號
-    //     const itToPcMatrixNumbers = new Set<number>();
-        
-    //     files.forEach(file => {
-    //       if (file.type === 'dat' && file.name.includes('It_to_PC_Matrix.dat')) {
-    //         itToPcMatrixNumbers.add(file.number);
-    //       }
-    //     });
-        
-    //     this.files = files.map(file => ({
-    //       ...file,
-    //       hasDatFile: file.type === 'txt' && itToPcMatrixNumbers.has(file.number)
-    //     }));
-    //   },
     
     selectFile(file: FileInfo) {
       this.selectedFile = file;
+      this.currentView = 'data-view';
     },
     
     clearSelection() {
       this.selectedFile = null;
+      this.currentView = 'welcome';
     },
     
     setFileContent(filePath: string, content: FileContent) {
@@ -99,6 +75,10 @@ export const useSpmDataStore = defineStore('spmData', {
     
     clearError() {
       this.error = '';
+    },
+    
+    setCurrentView(view: 'welcome' | 'data-view' | 'analysis') {
+      this.currentView = view;
     }
   }
 });

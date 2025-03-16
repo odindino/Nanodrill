@@ -1,13 +1,27 @@
 // App.vue
 <template>
   <div class="app-container">
-    <header class="app-header">
-      <h1>SPM 數據分析器</h1>
-    </header>
+    <SideBar @menu-item-clicked="handleMenuItemClick" />
     
-    <main class="app-main">
-      <FolderBrowser />
-    </main>
+    <div class="main-content">
+      <transition name="slide">
+        <FileSelector 
+          v-if="showFileSelector" 
+          @close="hideFileSelector"
+        />
+      </transition>
+      
+      <main class="content-area">
+        <!-- 主要內容區域，將根據選擇的檔案顯示資料分析視圖 -->
+        <div v-if="!selectedFile" class="welcome-screen">
+          <h2>歡迎使用 SPM 數據分析工具</h2>
+          <p>請從左側功能欄選擇「資料集」以開始</p>
+        </div>
+        
+        <!-- 選擇檔案後的內容 -->
+        <DataView v-else />
+      </main>
+    </div>
     
     <footer class="app-footer">
       <p>© 2025 SPM Data Analysis Tool</p>
@@ -16,13 +30,45 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue';
-import FolderBrowser from './components/FolderBrowser.vue';
+import { defineComponent, ref, computed } from 'vue';
+import SideBar from '@/components/SideBar.vue';
+import FileSelector from '@/components/FileSelector.vue';
+import DataView from '@/components/DataView.vue';
+import { useSpmDataStore } from './stores/spmDataStore';
 
 export default defineComponent({
   name: 'App',
   components: {
-    FolderBrowser
+    SideBar,
+    FileSelector,
+    DataView
+  },
+  setup() {
+    const spmDataStore = useSpmDataStore();
+    const showFileSelector = ref(false);
+    
+    const selectedFile = computed(() => spmDataStore.selectedFile);
+    
+    const handleMenuItemClick = (menuItem: string) => {
+      if (menuItem === 'dataset') {
+        toggleFileSelector();
+      }
+    };
+    
+    const toggleFileSelector = () => {
+      showFileSelector.value = !showFileSelector.value;
+    };
+    
+    const hideFileSelector = () => {
+      showFileSelector.value = false;
+    };
+    
+    return {
+      showFileSelector,
+      selectedFile,
+      handleMenuItemClick,
+      hideFileSelector
+    };
   }
 });
 </script>
@@ -47,20 +93,35 @@ body {
   min-height: 100vh;
 }
 
-.app-header {
-  background-color: #1976D2;
-  color: white;
-  padding: 16px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.main-content {
+  flex: 1;
+  display: flex;
+  position: relative;
 }
 
-.app-main {
+.content-area {
   flex: 1;
   padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
+  overflow-y: auto;
+}
+
+.welcome-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: #666;
+}
+
+.welcome-screen h2 {
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.welcome-screen p {
+  font-size: 16px;
 }
 
 .app-footer {
@@ -70,5 +131,16 @@ body {
   padding: 12px;
   font-size: 14px;
   border-top: 1px solid #ddd;
+}
+
+/* 側欄和文件選擇器的過渡動畫 */
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(-100%);
 }
 </style>
