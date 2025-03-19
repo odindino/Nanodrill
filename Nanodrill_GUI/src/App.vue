@@ -1,7 +1,6 @@
 <!-- App.vue -->
 <template>
-  <TestComponent />
-  <div class="flex flex-col min-h-screen bg-gray-50">
+  <div class="flex flex-col min-h-screen bg-neutral-50">
     <div class="flex flex-1">
       <SideBar @menu-item-clicked="handleMenuItemClick" />
       
@@ -10,12 +9,12 @@
           <FileSelector 
             v-if="showFileSelector" 
             @close="hideFileSelector"
-            class="relative z-10 h-[calc(100vh-40px)]"
+            class="relative z-10 h-[calc(100vh-40px)] bg-white shadow-lg"
           />
         </transition>
         
-        <main class="flex-1 p-5 overflow-y-auto transition-all" :class="{ 'pl-5': showFileSelector }">
-          <div v-if="!selectedFile" class="flex flex-col items-center justify-center h-full text-center text-gray-600">
+        <main class="flex-1 p-5 overflow-y-auto transition-all bg-neutral-50" :class="{ 'pl-5': showFileSelector }">
+          <div v-if="!selectedFile" class="flex flex-col items-center justify-center h-full text-center text-neutral-600">
             <h2 class="mb-4 text-2xl font-semibold">歡迎使用 SPM 數據分析工具</h2>
             <p class="text-base">請從左側功能欄選擇「資料集」以開始</p>
           </div>
@@ -25,8 +24,8 @@
       </div>
     </div>
     
-    <footer class="py-3 text-center text-sm text-gray-600 border-t border-gray-200 h-10">
-      © 2025 SPM Data Analysis Tool
+    <footer class="py-3 text-center text-sm text-neutral-500 border-t border-neutral-200 h-10 bg-white">
+      © 2025 SPM Data Analysis Tool developed by Odindino
     </footer>
   </div>
 </template>
