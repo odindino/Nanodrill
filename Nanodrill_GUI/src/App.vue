@@ -1,5 +1,5 @@
 <!-- App.vue -->
- <template>
+<template>
   <TestComponent />
   <div class="flex flex-col min-h-screen bg-gray-50">
     <div class="flex flex-1">

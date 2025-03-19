@@ -2,6 +2,7 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
+import './assets/styles.css';  // 確保路徑正確
 
 // 創建 Pinia 實例
 const pinia = createPinia();
