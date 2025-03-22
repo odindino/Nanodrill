@@ -1,7 +1,7 @@
 <!-- App.vue -->
 <template>
-  <div class="flex flex-col min-h-screen bg-neutral-50">
-    <div class="flex flex-1">
+  <div class="flex flex-col h-screen bg-neutral-50 overflow-hidden">
+    <div class="flex flex-1 overflow-hidden">
       <SideBar @menu-item-clicked="handleMenuItemClick" />
       
       <div class="relative flex flex-1 overflow-hidden">
@@ -9,14 +9,30 @@
           <FileSelector 
             v-if="showFileSelector" 
             @close="hideFileSelector"
-            class="relative z-10 h-[calc(100vh-40px)] bg-white shadow-lg"
+            @width-changed="updateFileSelectorWidth"
+            :initial-files="spmDataStore.files"
+            class="absolute top-0 left-0 z-10 h-full"
           />
         </transition>
         
-        <main class="flex-1 p-5 overflow-y-auto transition-all bg-neutral-50" :class="{ 'pl-5': showFileSelector }">
+        <main class="flex-1 p-5 overflow-y-auto bg-neutral-50" 
+              :class="{ 'ml-[450px]': showFileSelector }"
+              :style="showFileSelector ? { width: `calc(100% - ${fileSelectorWidth}px)` } : {}"
+        >
           <div v-if="!selectedFile" class="flex flex-col items-center justify-center h-full text-center text-neutral-600">
             <h2 class="mb-4 text-2xl font-semibold">歡迎使用 SPM 數據分析工具</h2>
             <p class="text-base">請從左側功能欄選擇「資料集」以開始</p>
+            
+            <!-- 如果有上次開啟的資料夾，顯示快速訪問按鈕 -->
+            <div v-if="lastDirectory" class="mt-8">
+              <p class="mb-3 text-sm text-gray-500">快速訪問上次開啟的資料夾：</p>
+              <button 
+                @click="openLastDirectory" 
+                class="px-4 py-2 bg-secondary-500 hover:bg-secondary-600 text-white font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+              >
+                {{ formatDirectoryPath(lastDirectory) }}
+              </button>
+            </div>
           </div>
           
           <DataView v-else />
@@ -24,20 +40,19 @@
       </div>
     </div>
     
-    <footer class="py-3 text-center text-sm text-neutral-500 border-t border-neutral-200 h-10 bg-white">
+    <footer class="py-3 text-center text-sm text-neutral-500 border-t border-neutral-200 h-10 bg-white flex-shrink-0">
       © 2025 SPM Data Analysis Tool developed by Odindino
     </footer>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed } from 'vue';
+import { defineComponent, ref, computed, watch, onMounted } from 'vue';
 import SideBar from '@/components/SideBar.vue';
 import FileSelector from '@/components/FileSelector.vue';
 import DataView from '@/components/DataView.vue';
 import { useSpmDataStore } from './stores/spmDataStore';
-import TestComponent from './components/TestComponent.vue';
-
+import { useUserPreferencesStore } from './stores/userPreferencesStore';
 
 export default defineComponent({
   name: 'App',
@@ -48,36 +63,99 @@ export default defineComponent({
   },
   setup() {
     const spmDataStore = useSpmDataStore();
+    const userPreferencesStore = useUserPreferencesStore();
+    
     const showFileSelector = ref(false);
+    const fileSelectorWidth = ref(userPreferencesStore.fileSelectorWidth);
     
     const selectedFile = computed(() => spmDataStore.selectedFile);
+    const lastDirectory = computed(() => userPreferencesStore.lastDirectory);
     
+    // 處理側邊欄選單項目點擊
     const handleMenuItemClick = (menuItem: string) => {
       if (menuItem === 'dataset') {
         toggleFileSelector();
       }
     };
     
+    // 切換檔案選擇器顯示/隱藏
     const toggleFileSelector = () => {
       showFileSelector.value = !showFileSelector.value;
     };
     
+    // 隱藏檔案選擇器
     const hideFileSelector = () => {
       showFileSelector.value = false;
     };
     
+    // 更新檔案選擇器寬度
+    const updateFileSelectorWidth = (width: number) => {
+      fileSelectorWidth.value = width;
+    };
+    
+    // 格式化目錄路徑顯示（只顯示最後一部分）
+    const formatDirectoryPath = (path: string): string => {
+      if (!path) return '';
+      
+      const parts = path.split(/[\/\\]/); // 同時處理 Windows 和 Unix 路徑分隔符
+      const lastPart = parts[parts.length - 1];
+      
+      if (lastPart) {
+        return lastPart;
+      } else if (parts.length > 1) {
+        // 如果路徑以分隔符結尾，則顯示倒數第二部分
+        return parts[parts.length - 2];
+      }
+      
+      return path.slice(0, 20) + (path.length > 20 ? '...' : '');
+    };
+    
+    // 開啟上次的資料夾
+    const openLastDirectory = async () => {
+      if (!lastDirectory.value) return;
+      
+      try {
+        const result = await window.pywebview.api.get_folder_files(lastDirectory.value);
+        
+        if (result) {
+          spmDataStore.setCurrentDirectory(lastDirectory.value);
+          spmDataStore.setFiles(result);
+          
+          // 打開檔案選擇器
+          showFileSelector.value = true;
+        }
+      } catch (error) {
+        console.error('Failed to open last directory:', error);
+      }
+    };
+    
+    // 當選擇檔案時，自動關閉檔案選擇器
+    watch(() => spmDataStore.selectedFile, (newVal) => {
+      if (newVal) {
+        // 添加短延遲，讓使用者能夠看到選中效果後再關閉選擇器
+        setTimeout(() => {
+          hideFileSelector();
+        }, 300);
+      }
+    });
+    
     return {
+      spmDataStore,
       showFileSelector,
+      fileSelectorWidth,
       selectedFile,
+      lastDirectory,
       handleMenuItemClick,
-      hideFileSelector
+      hideFileSelector,
+      updateFileSelectorWidth,
+      formatDirectoryPath,
+      openLastDirectory
     };
   }
 });
 </script>
 
 <style>
-
 .slide-enter-active,
 .slide-leave-active {
   transition: transform 0.3s ease;
@@ -86,5 +164,13 @@ export default defineComponent({
 .slide-enter-from,
 .slide-leave-to {
   transform: translateX(-100%);
+}
+
+/* 防止頁面整體捲動 */
+html, body {
+  overflow: hidden;
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 </style>
