@@ -3,6 +3,7 @@ import re
 import logging
 import webview
 from datetime import datetime
+from .core.analysis_service import AnalysisService
 
 # 設置日誌
 logging.basicConfig(level=logging.DEBUG, 
@@ -53,7 +54,7 @@ class NanodrillAPI:
             }
     
     def get_folder_files(self, folder_path=None):
-        """獲取資料夾中的所有 .txt 和 .dat 檔案，並排序"""
+        """獲取資料夾中的所有 .txt、.dat 和 .int 檔案，並排序"""
         try:
             if folder_path is None:
                 folder_path = self.current_directory
@@ -63,9 +64,9 @@ class NanodrillAPI:
                 
             files = []
             
-            # 獲取所有 .txt 和 .dat 檔案
+            # 獲取所有 .txt、.dat 和 .int 檔案
             for filename in os.listdir(folder_path):
-                if filename.endswith('.txt') or filename.endswith('.dat'):
+                if filename.endswith(('.txt', '.dat', '.int')):
                     file_path = os.path.join(folder_path, filename)
                     
                     # 嘗試從檔名中提取編號
@@ -104,23 +105,34 @@ class NanodrillAPI:
             # 解析基本參數
             parameters = self._parse_txt_parameters(content)
             
-            # 檢查是否有相關的 .dat 檔案
+            # 檢查是否有相關的 .dat 和 .int 檔案
             basename = os.path.basename(file_path)
-            number_match = re.search(r'_(\d+)\.', basename)
+            directory = os.path.dirname(file_path)
+            file_prefix = basename.rsplit('.', 1)[0]  # 移除副檔名
             
             related_files = []
-            if number_match:
-                file_number = number_match.group(1)
-                directory = os.path.dirname(file_path)
-                
-                # 尋找同編號的 .dat 檔案
-                for filename in os.listdir(directory):
-                    if filename.endswith('.dat') and f"_{file_number}." in filename:
-                        related_files.append({
-                            "name": filename,
-                            "path": os.path.join(directory, filename),
-                            "type": "dat"
-                        })
+            
+            # 從檔案描述中尋找相關檔案
+            if "FileDescriptions" in parameters:
+                for desc in parameters["FileDescriptions"]:
+                    if "FileName" in desc:
+                        rel_filename = desc["FileName"]
+                        rel_path = os.path.join(directory, rel_filename)
+                        
+                        if os.path.exists(rel_path):
+                            file_type = rel_filename.split('.')[-1]
+                            mod_time = os.path.getmtime(rel_path)
+                            
+                            related_files.append({
+                                "name": rel_filename,
+                                "path": rel_path,
+                                "type": file_type,
+                                "caption": desc.get("Caption", ""),
+                                "scale": desc.get("Scale", ""),
+                                "physUnit": desc.get("PhysUnit", ""),
+                                "modTime": mod_time,
+                                "modTimeStr": datetime.fromtimestamp(mod_time).strftime('%Y/%m/%d %H:%M:%S')
+                            })
             
             return {
                 "success": True,
@@ -132,59 +144,88 @@ class NanodrillAPI:
             logger.error(f"獲取 TXT 檔案內容時出錯: {str(e)}")
             return {"success": False, "error": str(e)}
     
+    def analyze_int_file(self, file_path, parent_file_info=None):
+        """分析 .int 檔案"""
+        try:
+            # 呼叫 AnalysisService 來處理 .int 檔案分析
+            return AnalysisService.analyze_int_file(file_path, parent_file_info)
+        except Exception as e:
+            logger.error(f"分析 INT 檔案時出錯: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
     def _parse_txt_parameters(self, content):
         """解析 txt 檔案中的參數"""
         parameters = {}
         
-        # 常見的參數
-        param_patterns = {
-            "Version": r'Version\s*:\s*([^\n]+)',
-            "Date": r'Date\s*:\s*([^\n]+)',
-            "Time": r'Time\s*:\s*([^\n]+)',
-            "UserName": r'UserName\s*:\s*([^\n]+)',
-            "SetPoint": r'SetPoint\s*:\s*([^\n]+)',
-            "Bias": r'Bias\s*:\s*([^\n]+)',
-            "BiasPhysUnit": r'BiasPhysUnit\s*:\s*([^\n]+)',
-            "XScanRange": r'XScanRange\s*:\s*([^\n]+)',
-            "YScanRange": r'YScanRange\s*:\s*([^\n]+)',
-            "XPhysUnit": r'XPhysUnit\s*:\s*([^\n]+)',
-            "YPhysUnit": r'YPhysUnit\s*:\s*([^\n]+)',
-            "xPixel": r'xPixel\s*:\s*([^\n]+)',
-            "yPixel": r'yPixel\s*:\s*([^\n]+)',
-        }
+        # 提取版本資訊
+        version_match = re.search(r'Version\s*:\s*([^\n]+)', content)
+        if version_match:
+            parameters['Version'] = version_match.group(1).strip()
         
-        for key, pattern in param_patterns.items():
+        # 提取日期和時間
+        date_match = re.search(r'Date\s*:\s*([^\n]+)', content)
+        if date_match:
+            parameters['Date'] = date_match.group(1).strip()
+        
+        time_match = re.search(r'Time\s*:\s*([^\n]+)', content)
+        if time_match:
+            parameters['Time'] = time_match.group(1).strip()
+        
+        # 提取用戶名
+        username_match = re.search(r'UserName\s*:\s*([^\n]+)', content)
+        if username_match:
+            parameters['UserName'] = username_match.group(1).strip()
+        
+        # 提取掃描參數
+        scan_params = [
+            'SetPoint', 'SetPointPhysUnit', 'FeedBackModus', 'Bias', 'BiasPhysUnit',
+            'Ki', 'Kp', 'FeedbackOnCh', 'XScanRange', 'YScanRange', 'XPhysUnit',
+            'YPhysUnit', 'Speed', 'LineRate', 'Angle', 'xPixel', 'yPixel',
+            'yCenter', 'xCenter', 'LockInFreq', 'LockInFreqPhysUnit', 'LockInAmpl',
+            'LockInAmplPhysUnit'
+        ]
+        
+        for param in scan_params:
+            pattern = fr'{param}\s*:\s*([^\n]+)'
             match = re.search(pattern, content)
             if match:
-                parameters[key] = match.group(1).strip()
+                parameters[param] = match.group(1).strip()
         
         # 解析檔案描述區段
-        file_descs = []
+        file_descriptions = []
         file_desc_pattern = r'FileDescBegin(.*?)FileDescEnd'
-        file_desc_matches = re.findall(file_desc_pattern, content, re.DOTALL)
+        file_descs = re.findall(file_desc_pattern, content, re.DOTALL)
         
-        for desc_content in file_desc_matches:
+        for desc_content in file_descs:
             desc = {}
             
-            # 提取文件名和其他參數
+            # 提取文件名
             filename_match = re.search(r'FileName\s*:\s*([^\n]+)', desc_content)
             if filename_match:
-                desc["FileName"] = filename_match.group(1).strip()
+                desc['FileName'] = filename_match.group(1).strip()
             
+            # 提取標題
             caption_match = re.search(r'Caption\s*:\s*([^\n]+)', desc_content)
             if caption_match:
-                desc["Caption"] = caption_match.group(1).strip()
+                desc['Caption'] = caption_match.group(1).strip()
             
+            # 提取比例因子
             scale_match = re.search(r'Scale\s*:\s*([^\n]+)', desc_content)
             if scale_match:
-                desc["Scale"] = scale_match.group(1).strip()
+                desc['Scale'] = scale_match.group(1).strip()
             
-            phys_unit_match = re.search(r'PhysUnit\s*:\s*([^\n]+)', desc_content)
-            if phys_unit_match:
-                desc["PhysUnit"] = phys_unit_match.group(1).strip()
+            # 提取物理單位
+            unit_match = re.search(r'PhysUnit\s*:\s*([^\n]+)', desc_content)
+            if unit_match:
+                desc['PhysUnit'] = unit_match.group(1).strip()
             
-            file_descs.append(desc)
+            # 提取偏移量
+            offset_match = re.search(r'Offset\s*:\s*([^\n]+)', desc_content)
+            if offset_match:
+                desc['Offset'] = offset_match.group(1).strip()
+            
+            file_descriptions.append(desc)
         
-        parameters["FileDescriptions"] = file_descs
+        parameters['FileDescriptions'] = file_descriptions
         
         return parameters
