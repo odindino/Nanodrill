@@ -166,8 +166,7 @@
     <div v-if="showPreviewPanel" 
          ref="previewPanelRef"
          class="h-full flex flex-col bg-white shadow-md border-l border-gray-200 transition-all duration-300 ease-in-out overflow-hidden"
-         :class="{ 'w-0': !previewPanelReady, 'w-preview': previewPanelReady }"
-         :style="{ width: previewPanelReady ? previewPanelWidth + 'px' : '0px' }">
+         :style="{ width: previewPanelWidth + 'px' }">
       
       <!-- 預覽面板頭部 -->
       <div class="flex items-center justify-between px-4 py-3 bg-gray-100 border-b border-gray-200">
@@ -236,25 +235,67 @@
                 </div>
               </div>
               
+              <!-- 重要參數展示面板 -->
+              <div v-if="previewData && previewData.parameters" class="bg-white border-t border-gray-200 p-3 flex-shrink-0">
+                <h4 class="text-gray-700 text-sm font-medium mb-2">重要測量參數</h4>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                  <!-- 日期和時間 -->
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">量測日期時間:</span>
+                    <span class="ml-1 font-medium text-xs">{{ formatDateTime(previewData.parameters.Date, previewData.parameters.Time) }}</span>
+                  </div>
+                  
+                  <!-- 量測電壓 -->
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">樣品電壓:</span>
+                    <span class="ml-1 font-medium text-xs">{{ previewData.parameters.Bias || 'N/A' }} {{ previewData.parameters.BiasPhysUnit || '' }}</span>
+                  </div>
+                  
+                  <!-- 量測電流 -->
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">設定電流:</span>
+                    <span class="ml-1 font-medium text-xs">{{ previewData.parameters.SetPoint || 'N/A' }} {{ previewData.parameters.SetPointPhysUnit || '' }}</span>
+                  </div>
+                  
+                  <!-- 量測範圍 -->
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">掃描範圍:</span>
+                    <span class="ml-1 font-medium text-xs">{{ previewData.parameters.XScanRange || '0' }} × {{ previewData.parameters.YScanRange || '0' }} {{ previewData.parameters.XPhysUnit || 'nm' }}</span>
+                  </div>
+                  
+                  <!-- 量測中心 -->
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">掃描中心:</span>
+                    <span class="ml-1 font-medium text-xs">{{ previewData.parameters.xCenter || '0' }}, {{ previewData.parameters.yCenter || '0' }} {{ previewData.parameters.XPhysUnit || 'nm' }}</span>
+                  </div>
+                  
+                  <!-- 量測角度 -->
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">掃描角度:</span>
+                    <span class="ml-1 font-medium text-xs">{{ previewData.parameters.Angle || '0' }}°</span>
+                  </div>
+                </div>
+              </div>
+              
               <!-- 統計數據面板 -->
-              <div v-if="previewStats" class="p-4 bg-white border-t border-gray-200 flex-shrink-0">
-                <h4 class="font-medium text-gray-700 mb-2">數據統計</h4>
-                <div class="grid grid-cols-2 gap-3 text-sm">
+              <div v-if="previewStats" class="p-3 bg-white border-t border-gray-200 flex-shrink-0">
+                <h4 class="text-gray-700 text-sm font-medium mb-2">數據統計</h4>
+                <div class="grid grid-cols-2 gap-2 text-sm">
                   <div class="bg-gray-50 p-2 rounded border border-gray-200">
                     <span class="text-gray-600">最小值:</span>
-                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.min) }} {{ previewUnit }}</span>
+                    <span class="ml-1 font-mono text-xs">{{ formatNumber(previewStats.min) }} {{ previewUnit }}</span>
                   </div>
                   <div class="bg-gray-50 p-2 rounded border border-gray-200">
                     <span class="text-gray-600">最大值:</span>
-                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.max) }} {{ previewUnit }}</span>
+                    <span class="ml-1 font-mono text-xs">{{ formatNumber(previewStats.max) }} {{ previewUnit }}</span>
                   </div>
                   <div class="bg-gray-50 p-2 rounded border border-gray-200">
                     <span class="text-gray-600">平均值:</span>
-                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.mean) }} {{ previewUnit }}</span>
+                    <span class="ml-1 font-mono text-xs">{{ formatNumber(previewStats.mean) }} {{ previewUnit }}</span>
                   </div>
                   <div class="bg-gray-50 p-2 rounded border border-gray-200">
                     <span class="text-gray-600">RMS:</span>
-                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.rms) }} {{ previewUnit }}</span>
+                    <span class="ml-1 font-mono text-xs">{{ formatNumber(previewStats.rms) }} {{ previewUnit }}</span>
                   </div>
                 </div>
               </div>
@@ -383,7 +424,6 @@ export default defineComponent({
     
     // 預覽面板相關狀態
     const showPreviewPanel = ref<boolean>(false);
-    const previewPanelReady = ref<boolean>(false);
     const previewPanelWidth = ref<number>(userPreferencesStore.previewPanelWidth || 480); // 預覽面板寬度
     const previewModalTitle = ref<string>('');
     const previewLoading = ref<boolean>(false);
@@ -414,6 +454,12 @@ export default defineComponent({
       delete params.FileDescriptions;
       return params;
     });
+    
+    // 格式化日期和時間
+    const formatDateTime = (date: string, time: string) => {
+      if (!date && !time) return 'N/A';
+      return `${date || ''} ${time || ''}`;
+    };
     
     // 檢查是否正在預覽某個檔案
     const isPreviewingFile = (file: FileInfo) => {
@@ -620,12 +666,6 @@ export default defineComponent({
         // 顯示預覽面板
         showPreviewPanel.value = true;
         
-        // 等待動畫效果準備
-        await nextTick();
-        setTimeout(() => {
-          previewPanelReady.value = true;
-        }, 50);
-        
         // 獲取 TXT 檔案內容
         const txtResult = await window.pywebview.api.get_txt_file_content(file.path);
         
@@ -664,17 +704,14 @@ export default defineComponent({
     
     // 關閉預覽面板
     const closePreview = () => {
-      previewPanelReady.value = false;
-      setTimeout(() => {
-        showPreviewPanel.value = false;
-        previewFile.value = null;
-        previewImage.value = null;
-        previewStats.value = null;
-        previewData.value = null;
-        rawContent.value = '';
-        fileDescriptions.value = [];
-        previewError.value = null;
-      }, 300); // 等待淡出動畫完成
+      showPreviewPanel.value = false;
+      previewFile.value = null;
+      previewImage.value = null;
+      previewStats.value = null;
+      previewData.value = null;
+      rawContent.value = '';
+      fileDescriptions.value = [];
+      previewError.value = null;
     };
     
     // 開始調整選擇器寬度
@@ -860,7 +897,6 @@ export default defineComponent({
       isResizing,
       columnWidths,
       showPreviewPanel,
-      previewPanelReady,
       previewPanelWidth,
       previewPanelRef,
       previewModalTitle,
@@ -885,87 +921,9 @@ export default defineComponent({
       startResizingWidth,
       startResizingPreviewWidth,
       startResize,
-      formatNumber
+      formatNumber,
+      formatDateTime
     };
   }
 });
 </script>
-
-<style scoped>
-/* 可調整寬度的把手 */
-.resize-handle {
-  position: absolute;
-  right: -4px;
-  top: 0;
-  bottom: 0;
-  width: 7px;
-  background: transparent;
-  cursor: col-resize;
-  z-index: 20;
-}
-
-.resize-handle:hover, .resize-handle:active {
-  background-color: rgba(0, 120, 212, 0.1);
-}
-
-/* 可調整預覽面板寬度的把手 */
-.preview-resize-handle {
-  position: absolute;
-  left: -4px;
-  top: 0;
-  bottom: 0;
-  width: 7px;
-  background: transparent;
-  cursor: col-resize;
-  z-index: 20;
-}
-
-.preview-resize-handle:hover, .preview-resize-handle:active {
-  background-color: rgba(0, 120, 212, 0.1);
-}
-
-.resizing {
-  user-select: none;
-  cursor: col-resize;
-}
-
-/* 欄位調整把手 */
-.column-resizer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 5px;
-  cursor: col-resize;
-  z-index: 10;
-}
-
-.column-resizer:hover {
-  background-color: rgba(0, 120, 212, 0.2);
-}
-
-/* 確保表頭固定在頂部 */
-thead {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: #f9fafb;
-}
-
-/* 確保表格單元格內容正確顯示 */
-td {
-  position: relative;
-  overflow: hidden;
-}
-
-/* 預覽面板寬度類名 */
-.w-preview {
-  width: var(--preview-width, 480px);
-}
-
-/* 預覽面板過渡動畫 */
-.transition-all {
-  transition-property: all;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-</style>
