@@ -1,146 +1,329 @@
 <!-- src/components/FileSelector.vue -->
 <template>
-  <div :class="['h-full bg-white shadow-md flex flex-col border-r border-neutral-200 overflow-hidden', { 'resizing': isResizing }]" 
-       :style="{ width: selectorWidth + 'px' }">
-    <!-- 標題列 - 固定在頂部 -->
-    <div class="flex items-center px-4 py-3 bg-neutral-100 border-b border-neutral-200 flex-shrink-0">
-      <button class="p-1.5 rounded-full hover:bg-neutral-200 text-neutral-600 focus:outline-none" @click="$emit('close')">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-      <h2 class="ml-2 text-base font-medium text-neutral-800 flex-1 text-center">資料檔案選擇器</h2>
-    </div>
-    
-    <!-- 操作區 - 固定在頂部 -->
-    <div class="p-4 flex flex-col gap-4 flex-shrink-0">
-      <button 
-        class="w-full py-2.5 px-4 bg-secondary-500 hover:bg-secondary-600 text-white font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
-        @click="openFolderDialog"
-      >
-        選擇資料夾
-      </button>
+  <div class="h-full flex overflow-hidden">
+    <!-- 檔案選擇器主區域 -->
+    <div :class="['h-full bg-white shadow-md flex flex-col border-r border-neutral-200 overflow-hidden', { 'resizing': isResizing }]" 
+         :style="{ width: selectorWidth + 'px' }">
+      <!-- 標題列 - 固定在頂部 -->
+      <div class="flex items-center px-4 py-3 bg-neutral-100 border-b border-neutral-200 flex-shrink-0">
+        <button class="p-1.5 rounded-full hover:bg-neutral-200 text-neutral-600 focus:outline-none" @click="$emit('close')">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <h2 class="ml-2 text-base font-medium text-neutral-800 flex-1 text-center">資料檔案選擇器</h2>
+      </div>
       
-      <div v-if="folderPath" class="bg-neutral-50 rounded-md border border-neutral-200 overflow-hidden">
-        <div class="px-3 py-2 text-xs font-medium text-neutral-600 bg-neutral-100 border-b border-neutral-200">
-          當前路徑:
-        </div>
-        <div class="p-3 text-sm text-secondary-600 font-mono bg-white break-all max-h-16 overflow-y-auto">
-          {{ folderPath }}
+      <!-- 操作區 - 固定在頂部 -->
+      <div class="p-4 flex flex-col gap-4 flex-shrink-0">
+        <button 
+          class="w-full py-2.5 px-4 bg-secondary-500 hover:bg-secondary-600 text-white font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2"
+          @click="openFolderDialog"
+        >
+          選擇資料夾
+        </button>
+        
+        <div v-if="folderPath" class="bg-neutral-50 rounded-md border border-neutral-200 overflow-hidden">
+          <div class="px-3 py-2 text-xs font-medium text-neutral-600 bg-neutral-100 border-b border-neutral-200">
+            當前路徑:
+          </div>
+          <div class="p-3 text-sm text-secondary-600 font-mono bg-white break-all max-h-16 overflow-y-auto">
+            {{ folderPath }}
+          </div>
         </div>
       </div>
+      
+      <!-- 錯誤訊息區 - 可以捲動 -->
+      <div v-if="errorMessage" class="mx-4 mb-4 px-4 py-3 bg-error-light/20 text-error-dark text-sm rounded border-l-4 border-error flex-shrink-0">
+        {{ errorMessage }}
+      </div>
+      
+      <!-- 檔案列表區 - 可以捲動 -->
+      <div v-if="folderPath && filteredAndSortedFiles.length > 0" class="flex-1 flex flex-col px-4 pb-4 overflow-hidden min-h-0">
+        <!-- 搜尋和排序控制項 - 固定在頂部 -->
+        <div class="flex flex-col space-y-3 mb-3 flex-shrink-0">
+          <div class="flex items-center space-x-2">
+            <div class="relative flex-1">
+              <input 
+                type="text" 
+                v-model="searchQuery" 
+                placeholder="搜尋檔案名稱..." 
+                class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+              <label for="sort-select" class="text-xs text-gray-600 whitespace-nowrap">排序:</label>
+              <select 
+                id="sort-select" 
+                v-model="sortOption" 
+                class="text-xs border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-white"
+              >
+                <option value="time_desc">時間 (新到舊)</option>
+                <option value="time_asc">時間 (舊到新)</option>
+                <option value="name_asc">名稱 (A-Z)</option>
+                <option value="name_desc">名稱 (Z-A)</option>
+                <option value="number_asc">編號 (小到大)</option>
+                <option value="number_desc">編號 (大到小)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 表格容器 - 可捲動區域 -->
+        <div class="flex-1 border border-gray-200 rounded overflow-auto min-h-0">
+          <table class="w-full table-fixed divide-y divide-gray-200">
+            <thead class="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                <th 
+                  class="px-4 py-2 text-left text-xs font-medium text-gray-500 tracking-wider relative"
+                  :style="{ width: columnWidths.filename + 'px' }"
+                >
+                  檔案名稱
+                  <div class="column-resizer" @mousedown="startResize($event, 'filename')"></div>
+                </th>
+                <th 
+                  class="px-4 py-2 text-left text-xs font-medium text-gray-500 tracking-wider relative"
+                  :style="{ width: columnWidths.time + 'px' }"
+                >
+                  修改時間
+                  <div class="column-resizer" @mousedown="startResize($event, 'time')"></div>
+                </th>
+                <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 tracking-wider w-24">操作</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr 
+                v-for="file in filteredAndSortedFiles" 
+                :key="file.path"
+                :class="[
+                  file.hasDatFile ? 'bg-secondary-50/30' : '',
+                  isSelected(file) ? 'bg-primary-50' : '',
+                  isPreviewingFile(file) ? 'bg-blue-50' : '',
+                  'hover:bg-gray-50'
+                ]"
+              >
+                <td class="px-4 py-2 text-sm" :style="{ maxWidth: columnWidths.filename + 'px' }">
+                  <div class="flex items-center space-x-2 overflow-hidden">
+                    <span v-if="file.hasDatFile" class="text-secondary flex-shrink-0 text-lg" title="該檔案有對應的 IV 曲線數據">⚡</span>
+                    <span 
+                      class="truncate cursor-pointer hover:text-primary" 
+                      :title="file.name"
+                      @click="showPreview(file)"
+                    >
+                      {{ file.name }}
+                    </span>
+                  </div>
+                </td>
+                <td class="px-4 py-2 text-xs text-gray-500 truncate" :style="{ maxWidth: columnWidths.time + 'px' }">
+                  {{ file.modTimeStr }}
+                </td>
+                <td class="px-4 py-2 text-sm text-center">
+                  <div class="flex space-x-1 justify-center">
+                    <button 
+                      @click="showPreview(file)" 
+                      class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-white bg-secondary hover:bg-secondary-dark focus:outline-none focus:ring-1 focus:ring-secondary focus:ring-offset-1"
+                      title="預覽圖像"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </button>
+                    <button 
+                      @click="viewFile(file)" 
+                      class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-1 focus:ring-primary focus:ring-offset-1"
+                      title="查看檔案詳情"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- 空檔案夾提示 -->
+      <div v-else-if="folderPath && filteredAndSortedFiles.length === 0" class="mt-8 mx-4 p-6 text-center text-gray-500 bg-gray-50 rounded border border-gray-200 flex-shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+        </svg>
+        <p>資料夾中沒有找到 .txt 檔案</p>
+      </div>
+      
+      <!-- 可調整寬度的把手 -->
+      <div class="resize-handle" @mousedown="startResizingWidth"></div>
     </div>
     
-    <!-- 錯誤訊息區 - 可以捲動 -->
-    <div v-if="errorMessage" class="mx-4 mb-4 px-4 py-3 bg-error-light/20 text-error-dark text-sm rounded border-l-4 border-error flex-shrink-0">
-      {{ errorMessage }}
-    </div>
-    
-    <!-- 檔案列表區 - 可以捲動 -->
-    <div v-if="folderPath && filteredAndSortedFiles.length > 0" class="flex-1 flex flex-col px-4 pb-4 overflow-hidden min-h-0">
-      <!-- 搜尋和排序控制項 - 固定在頂部 -->
-      <div class="flex flex-col space-y-3 mb-3 flex-shrink-0">
-        <div class="flex items-center space-x-2">
-          <div class="relative flex-1">
-            <input 
-              type="text" 
-              v-model="searchQuery" 
-              placeholder="搜尋檔案名稱..." 
-              class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-            />
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+    <!-- 預覽面板 -->
+    <div v-if="showPreviewPanel" 
+         ref="previewPanelRef"
+         class="h-full flex flex-col bg-white shadow-md border-l border-gray-200 transition-all duration-300 ease-in-out overflow-hidden"
+         :class="{ 'w-0': !previewPanelReady, 'w-preview': previewPanelReady }"
+         :style="{ width: previewPanelReady ? previewPanelWidth + 'px' : '0px' }">
+      
+      <!-- 預覽面板頭部 -->
+      <div class="flex items-center justify-between px-4 py-3 bg-gray-100 border-b border-gray-200">
+        <h3 class="font-medium text-gray-900 truncate flex-1">
+          {{ previewModalTitle }}
+        </h3>
+        <button @click="closePreview" 
+                class="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 focus:outline-none">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <!-- 預覽面板內容 -->
+      <div class="flex flex-col flex-grow overflow-hidden">
+        <!-- 載入中指示器 -->
+        <div v-if="previewLoading" class="flex-grow flex items-center justify-center p-8">
+          <div class="flex flex-col items-center">
+            <div class="w-10 h-10 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
+            <span class="text-gray-600">正在載入預覽資料...</span>
+          </div>
+        </div>
+        
+        <!-- 錯誤訊息 -->
+        <div v-else-if="previewError" class="flex-grow p-6 overflow-y-auto">
+          <div class="bg-red-50 border-l-4 border-red-500 p-4 text-red-800">
+            <p class="font-medium">載入預覽失敗</p>
+            <p class="mt-2">{{ previewError }}</p>
+          </div>
+        </div>
+        
+        <!-- 預覽內容 -->
+        <div v-else-if="previewData" class="flex-grow flex flex-col overflow-hidden">
+          <!-- 標籤頁導航 -->
+          <div class="bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <div class="flex">
+              <button 
+                v-for="tab in previewTabs" 
+                :key="tab.id" 
+                @click="activePreviewTab = tab.id"
+                class="px-4 py-2 text-sm font-medium border-b-2 focus:outline-none transition-colors"
+                :class="[
+                  activePreviewTab === tab.id 
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ]"
+              >
+                {{ tab.name }}
+              </button>
+            </div>
           </div>
           
-          <div class="flex items-center space-x-2">
-            <label for="sort-select" class="text-xs text-gray-600 whitespace-nowrap">排序:</label>
-            <select 
-              id="sort-select" 
-              v-model="sortOption" 
-              class="text-xs border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-white"
-            >
-              <option value="time_desc">時間 (新到舊)</option>
-              <option value="time_asc">時間 (舊到新)</option>
-              <option value="name_asc">名稱 (A-Z)</option>
-              <option value="name_desc">名稱 (Z-A)</option>
-              <option value="number_asc">編號 (小到大)</option>
-              <option value="number_desc">編號 (大到小)</option>
-            </select>
+          <!-- 標籤頁內容 -->
+          <div class="flex-grow flex overflow-hidden">
+            <!-- 形貌圖頁面 -->
+            <div v-if="activePreviewTab === 'image'" class="flex-grow flex flex-col overflow-hidden">
+              <!-- 圖像顯示區域 -->
+              <div class="flex-grow overflow-auto p-4 bg-gray-50">
+                <img v-if="previewImage" 
+                     :src="'data:image/png;base64,' + previewImage" 
+                     alt="形貌預覽" 
+                     class="w-full max-w-full h-auto rounded border border-gray-200 bg-white" />
+                <div v-else class="flex items-center justify-center h-full text-gray-500">
+                  無法載入形貌圖像
+                </div>
+              </div>
+              
+              <!-- 統計數據面板 -->
+              <div v-if="previewStats" class="p-4 bg-white border-t border-gray-200 flex-shrink-0">
+                <h4 class="font-medium text-gray-700 mb-2">數據統計</h4>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">最小值:</span>
+                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.min) }} {{ previewUnit }}</span>
+                  </div>
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">最大值:</span>
+                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.max) }} {{ previewUnit }}</span>
+                  </div>
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">平均值:</span>
+                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.mean) }} {{ previewUnit }}</span>
+                  </div>
+                  <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                    <span class="text-gray-600">RMS:</span>
+                    <span class="ml-2 font-mono">{{ formatNumber(previewStats.rms) }} {{ previewUnit }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 參數頁面 -->
+            <div v-else-if="activePreviewTab === 'params'" class="flex-grow p-4 overflow-auto bg-gray-50">
+              <!-- 基本參數區塊 -->
+              <div class="bg-white rounded-lg shadow mb-6 overflow-hidden">
+                <div class="bg-gray-100 px-4 py-2 font-medium text-gray-700 border-b border-gray-200">
+                  基本參數
+                </div>
+                <div class="p-4">
+                  <div class="grid grid-cols-2 gap-x-6 gap-y-3">
+                    <div v-for="(value, key) in basicParameters" :key="key" class="flex justify-between border-b border-gray-100 py-1">
+                      <span class="text-sm text-gray-600">{{ key }}:</span>
+                      <span class="text-sm font-medium">{{ value }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 檔案描述區塊 -->
+              <div v-if="fileDescriptions.length > 0" class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="bg-gray-100 px-4 py-2 font-medium text-gray-700 border-b border-gray-200">
+                  相關檔案
+                </div>
+                <div class="p-4">
+                  <div v-for="(desc, index) in fileDescriptions" 
+                       :key="index" 
+                       class="mb-4 last:mb-0 border border-gray-200 rounded-lg overflow-hidden">
+                    <div class="bg-gray-50 px-3 py-2 font-medium text-sm border-b border-gray-200">
+                      {{ desc.Caption || desc.FileName }}
+                    </div>
+                    <div class="p-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <div class="text-xs text-gray-500">檔案名稱</div>
+                        <div class="text-sm mt-1">{{ desc.FileName }}</div>
+                      </div>
+                      <div>
+                        <div class="text-xs text-gray-500">物理單位</div>
+                        <div class="text-sm mt-1">{{ desc.PhysUnit }}</div>
+                      </div>
+                      <div class="col-span-2">
+                        <div class="text-xs text-gray-500">縮放比例</div>
+                        <div class="text-sm font-mono mt-1">{{ desc.Scale }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 原始文件內容頁面 -->
+            <div v-else-if="activePreviewTab === 'raw'" class="flex-grow overflow-auto">
+              <pre class="p-4 text-xs font-mono whitespace-pre-wrap bg-gray-50 h-full">{{ rawContent }}</pre>
+            </div>
           </div>
         </div>
       </div>
       
-      <!-- 表格容器 - 可捲動區域 -->
-      <div class="flex-1 border border-gray-200 rounded overflow-auto min-h-0">
-        <table class="w-full table-fixed divide-y divide-gray-200">
-          <thead class="bg-gray-50 sticky top-0 z-10">
-            <tr>
-              <th 
-                class="px-4 py-2 text-left text-xs font-medium text-gray-500 tracking-wider relative"
-                :style="{ width: columnWidths.filename + 'px' }"
-              >
-                檔案名稱
-                <div class="column-resizer" @mousedown="startResize($event, 'filename')"></div>
-              </th>
-              <th 
-                class="px-4 py-2 text-left text-xs font-medium text-gray-500 tracking-wider relative"
-                :style="{ width: columnWidths.time + 'px' }"
-              >
-                修改時間
-                <div class="column-resizer" @mousedown="startResize($event, 'time')"></div>
-              </th>
-              <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 tracking-wider w-20">操作</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr 
-              v-for="file in filteredAndSortedFiles" 
-              :key="file.path"
-              :class="[
-                file.hasDatFile ? 'bg-secondary-50/30' : '',
-                isSelected(file) ? 'bg-primary-50' : '',
-                'hover:bg-gray-50'
-              ]"
-            >
-              <td class="px-4 py-2 text-sm" :style="{ maxWidth: columnWidths.filename + 'px' }">
-                <div class="flex items-center space-x-2 overflow-hidden">
-                  <span v-if="file.hasDatFile" class="text-secondary flex-shrink-0 text-lg" title="該檔案有對應的 IV 曲線數據">⚡</span>
-                  <span class="truncate" :title="file.name">{{ file.name }}</span>
-                </div>
-              </td>
-              <td class="px-4 py-2 text-xs text-gray-500 truncate" :style="{ maxWidth: columnWidths.time + 'px' }">
-                {{ file.modTimeStr }}
-              </td>
-              <td class="px-4 py-2 text-sm text-center">
-                <button 
-                  @click="viewFile(file)" 
-                  class="inline-flex items-center px-2.5 py-1 border border-transparent text-xs font-medium rounded text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  查看
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- 可調整預覽面板寬度的把手 -->
+      <div class="preview-resize-handle" @mousedown="startResizingPreviewWidth"></div>
     </div>
-    
-    <!-- 空檔案夾提示 -->
-    <div v-else-if="folderPath && filteredAndSortedFiles.length === 0" class="mt-8 mx-4 p-6 text-center text-gray-500 bg-gray-50 rounded border border-gray-200 flex-shrink-0">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-      </svg>
-      <p>資料夾中沒有找到 .txt 檔案</p>
-    </div>
-    
-    <!-- 可調整寬度的把手 -->
-    <div class="resize-handle" @mousedown="startResizingWidth"></div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useSpmDataStore } from '../stores/spmDataStore';
 import { useUserPreferencesStore } from '../stores/userPreferencesStore';
 
@@ -154,6 +337,14 @@ interface FileInfo {
   hasDatFile: boolean;
 }
 
+interface FileDescription {
+  FileName: string;
+  Caption?: string;
+  Scale?: string;
+  PhysUnit?: string;
+  Offset?: string;
+}
+
 declare global {
   interface Window {
     pywebview: {
@@ -161,6 +352,7 @@ declare global {
         open_folder_dialog: () => Promise<any>;
         get_folder_files: (path: string) => Promise<any>;
         get_txt_file_content: (path: string) => Promise<any>;
+        get_int_file_preview: (path: string) => Promise<any>;
       };
     };
   }
@@ -186,15 +378,67 @@ export default defineComponent({
       time: userPreferencesStore.columnWidths.time
     });
     
+    // 預覽面板相關引用
+    const previewPanelRef = ref<HTMLDivElement | null>(null);
+    
+    // 預覽面板相關狀態
+    const showPreviewPanel = ref<boolean>(false);
+    const previewPanelReady = ref<boolean>(false);
+    const previewPanelWidth = ref<number>(userPreferencesStore.previewPanelWidth || 480); // 預覽面板寬度
+    const previewModalTitle = ref<string>('');
+    const previewLoading = ref<boolean>(false);
+    const previewError = ref<string | null>(null);
+    const previewImage = ref<string | null>(null);
+    const previewStats = ref<any | null>(null);
+    const previewUnit = ref<string>('nm');
+    const previewFile = ref<string | null>(null);
+    const previewData = ref<any | null>(null);
+    const rawContent = ref<string>('');
+    const fileDescriptions = ref<FileDescription[]>([]);
+    
+    // 預覽標籤頁
+    const activePreviewTab = ref<string>('image');
+    const previewTabs = [
+      { id: 'image', name: '形貌圖' },
+      { id: 'params', name: '參數' },
+      { id: 'raw', name: '原始內容' }
+    ];
+    
+    // 從預覽資料中提取基本參數，排除檔案描述
+    const basicParameters = computed(() => {
+      if (!previewData.value || !previewData.value.parameters) {
+        return {};
+      }
+      
+      const params = { ...previewData.value.parameters };
+      delete params.FileDescriptions;
+      return params;
+    });
+    
+    // 檢查是否正在預覽某個檔案
+    const isPreviewingFile = (file: FileInfo) => {
+      return previewFile.value === file.path && showPreviewPanel.value;
+    };
+    
     // 監視排序選項變更並保存
     watch(sortOption, (newValue) => {
       userPreferencesStore.setSortOption(newValue);
     });
     
-    // 可調整寬度相關狀態
+    // 監視預覽面板寬度的變更
+    watch(previewPanelWidth, (newWidth) => {
+      userPreferencesStore.setPreviewPanelWidth(newWidth);
+    });
+    
+    // 可調整選擇器寬度相關狀態
     const isResizing = ref(false);
     const startX = ref(0);
     const startWidth = ref(0);
+    
+    // 可調整預覽面板寬度相關狀態
+    const isResizingPreview = ref(false);
+    const previewStartX = ref(0);
+    const previewStartWidth = ref(0);
     
     // 可調整欄位寬度相關狀態
     const resizingColumn = ref<string | null>(null);
@@ -333,6 +577,9 @@ export default defineComponent({
     // 查看文件
     const viewFile = async (file: FileInfo) => {
       try {
+        // 先關閉預覽面板
+        closePreview();
+        
         if (file.type === 'txt') {
           // 將檔案設為選中
           spmDataStore.selectFile(file);
@@ -355,6 +602,81 @@ export default defineComponent({
       }
     };
     
+    // 顯示預覽圖
+    const showPreview = async (file: FileInfo) => {
+      try {
+        // 重置預覽狀態
+        previewError.value = null;
+        previewImage.value = null;
+        previewStats.value = null;
+        previewData.value = null;
+        rawContent.value = '';
+        fileDescriptions.value = [];
+        previewLoading.value = true;
+        previewFile.value = file.path;
+        previewModalTitle.value = `預覽 - ${file.name}`;
+        activePreviewTab.value = 'image'; // 預設顯示形貌圖標籤頁
+        
+        // 顯示預覽面板
+        showPreviewPanel.value = true;
+        
+        // 等待動畫效果準備
+        await nextTick();
+        setTimeout(() => {
+          previewPanelReady.value = true;
+        }, 50);
+        
+        // 獲取 TXT 檔案內容
+        const txtResult = await window.pywebview.api.get_txt_file_content(file.path);
+        
+        if (txtResult.success) {
+          previewData.value = txtResult;
+          rawContent.value = txtResult.content;
+          
+          if (txtResult.parameters && txtResult.parameters.FileDescriptions) {
+            fileDescriptions.value = txtResult.parameters.FileDescriptions;
+          }
+          
+          // 獲取預覽圖
+          console.log('正在獲取預覽圖:', file.path);
+          const imgResult = await window.pywebview.api.get_int_file_preview(file.path);
+          
+          if (imgResult.success && imgResult.image) {
+            console.log('預覽圖獲取成功，大小:', imgResult.image.length);
+            previewImage.value = imgResult.image;
+            previewStats.value = imgResult.statistics;
+            previewUnit.value = imgResult.physUnit || 'nm';
+          } else {
+            console.warn('預覽圖獲取失敗:', imgResult.error);
+            // 即使圖像獲取失敗，我們仍然顯示 TXT 檔案內容，所以不設置 previewError
+          }
+        } else {
+          console.error('TXT 檔案內容獲取失敗:', txtResult.error);
+          previewError.value = txtResult.error || '無法獲取檔案內容';
+        }
+      } catch (error) {
+        console.error('預覽載入錯誤:', error);
+        previewError.value = `系統錯誤: ${error}`;
+      } finally {
+        previewLoading.value = false;
+      }
+    };
+    
+    // 關閉預覽面板
+    const closePreview = () => {
+      previewPanelReady.value = false;
+      setTimeout(() => {
+        showPreviewPanel.value = false;
+        previewFile.value = null;
+        previewImage.value = null;
+        previewStats.value = null;
+        previewData.value = null;
+        rawContent.value = '';
+        fileDescriptions.value = [];
+        previewError.value = null;
+      }, 300); // 等待淡出動畫完成
+    };
+    
     // 開始調整選擇器寬度
     const startResizingWidth = (e: MouseEvent) => {
       e.preventDefault();
@@ -365,6 +687,18 @@ export default defineComponent({
       // 添加全局滑鼠事件
       document.addEventListener('mousemove', onMouseMoveForPanel);
       document.addEventListener('mouseup', onMouseUpForPanel);
+    };
+    
+    // 開始調整預覽面板寬度
+    const startResizingPreviewWidth = (e: MouseEvent) => {
+      e.preventDefault();
+      isResizingPreview.value = true;
+      previewStartX.value = e.clientX;
+      previewStartWidth.value = previewPanelWidth.value;
+      
+      // 添加全局滑鼠事件
+      document.addEventListener('mousemove', onMouseMoveForPreviewPanel);
+      document.addEventListener('mouseup', onMouseUpForPreviewPanel);
     };
     
     // 滑鼠移動時調整選擇器寬度
@@ -379,6 +713,15 @@ export default defineComponent({
       emit('width-changed', selectorWidth.value);
     };
     
+    // 滑鼠移動時調整預覽面板寬度
+    const onMouseMoveForPreviewPanel = (e: MouseEvent) => {
+      if (!isResizingPreview.value) return;
+      
+      const newWidth = previewStartWidth.value - (e.clientX - previewStartX.value);
+      // 設定最小和最大寬度
+      previewPanelWidth.value = Math.max(350, Math.min(900, newWidth));
+    };
+    
     // 滑鼠放開時結束調整選擇器寬度，並保存設定
     const onMouseUpForPanel = () => {
       isResizing.value = false;
@@ -387,6 +730,16 @@ export default defineComponent({
       
       // 保存選擇器寬度到偏好設定
       userPreferencesStore.setFileSelectorWidth(selectorWidth.value);
+    };
+    
+    // 滑鼠放開時結束調整預覽面板寬度，並保存設定
+    const onMouseUpForPreviewPanel = () => {
+      isResizingPreview.value = false;
+      document.removeEventListener('mousemove', onMouseMoveForPreviewPanel);
+      document.removeEventListener('mouseup', onMouseUpForPreviewPanel);
+      
+      // 保存預覽面板寬度到偏好設定
+      userPreferencesStore.setPreviewPanelWidth(previewPanelWidth.value);
     };
     
     // 開始調整欄位寬度
@@ -435,16 +788,23 @@ export default defineComponent({
       document.removeEventListener('mouseup', onMouseUpForColumn);
     };
     
-    // 組件卸載時移除事件監聽器
-    onBeforeUnmount(() => {
-      document.removeEventListener('mousemove', onMouseMoveForPanel);
-      document.removeEventListener('mouseup', onMouseUpForPanel);
-      document.removeEventListener('mousemove', onMouseMoveForColumn);
-      document.removeEventListener('mouseup', onMouseUpForColumn);
-    });
+    // 格式化數字顯示，保留 2 位小數
+    const formatNumber = (value: number) => {
+      if (value === null || value === undefined) return 'N/A';
+      return value.toFixed(2);
+    };
     
-    // 組件掛載時自動開啟上次的目錄
+    // 處理ESC鍵關閉預覽面板
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showPreviewPanel.value) {
+        closePreview();
+      }
+    };
+    
+    // 組件掛載時添加鍵盤事件監聽
     onMounted(() => {
+      document.addEventListener('keydown', handleKeyDown);
+      
       // 如果已有選擇的目錄，自動加載
       if (spmDataStore.currentDirectory) {
         folderPath.value = spmDataStore.currentDirectory;
@@ -465,7 +825,7 @@ export default defineComponent({
             if (result && result.length > 0) {
               folderPath.value = lastDir;
               files.value = processFiles(result);
-              spmDataStore.setCurrentDirectory(lastDir); // Use lastDir which we've already verified
+              spmDataStore.setCurrentDirectory(lastDir);
               spmDataStore.setFiles(files.value);
             }
           } catch (error) {
@@ -478,6 +838,17 @@ export default defineComponent({
       }
     });
     
+    // 組件卸載時移除事件監聽器
+    onBeforeUnmount(() => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousemove', onMouseMoveForPanel);
+      document.removeEventListener('mouseup', onMouseUpForPanel);
+      document.removeEventListener('mousemove', onMouseMoveForColumn);
+      document.removeEventListener('mouseup', onMouseUpForColumn);
+      document.removeEventListener('mousemove', onMouseMoveForPreviewPanel);
+      document.removeEventListener('mouseup', onMouseUpForPreviewPanel);
+    });
+    
     return {
       folderPath,
       errorMessage,
@@ -488,11 +859,33 @@ export default defineComponent({
       selectorWidth,
       isResizing,
       columnWidths,
+      showPreviewPanel,
+      previewPanelReady,
+      previewPanelWidth,
+      previewPanelRef,
+      previewModalTitle,
+      previewLoading,
+      previewError,
+      previewImage,
+      previewStats,
+      previewUnit,
+      previewFile,
+      previewData,
+      rawContent,
+      fileDescriptions,
+      activePreviewTab,
+      previewTabs,
+      basicParameters,
       openFolderDialog,
       viewFile,
+      showPreview,
+      closePreview,
       isSelected,
+      isPreviewingFile,
       startResizingWidth,
-      startResize
+      startResizingPreviewWidth,
+      startResize,
+      formatNumber
     };
   }
 });
@@ -512,6 +905,22 @@ export default defineComponent({
 }
 
 .resize-handle:hover, .resize-handle:active {
+  background-color: rgba(0, 120, 212, 0.1);
+}
+
+/* 可調整預覽面板寬度的把手 */
+.preview-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 20;
+}
+
+.preview-resize-handle:hover, .preview-resize-handle:active {
   background-color: rgba(0, 120, 212, 0.1);
 }
 
@@ -547,5 +956,16 @@ thead {
 td {
   position: relative;
   overflow: hidden;
+}
+
+/* 預覽面板寬度類名 */
+.w-preview {
+  width: var(--preview-width, 480px);
+}
+
+/* 預覽面板過渡動畫 */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style>

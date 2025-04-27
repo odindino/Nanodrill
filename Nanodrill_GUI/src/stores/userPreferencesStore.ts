@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 
 interface UserPreferences {
   fileSelectorWidth: number;
+  previewPanelWidth: number;  // 新增預覽面板寬度
   columnWidths: {
     [key: string]: number;
   };
@@ -16,6 +17,7 @@ const STORAGE_KEY = 'nanodrill_user_preferences';
 // 預設偏好設定
 const DEFAULT_PREFERENCES: UserPreferences = {
   fileSelectorWidth: 450,
+  previewPanelWidth: 480,  // 預覽面板預設寬度
   columnWidths: {
     filename: 280,
     time: 150
@@ -52,6 +54,12 @@ export const useUserPreferencesStore = defineStore('userPreferences', {
     // 更新選擇器寬度
     setFileSelectorWidth(width: number) {
       this.fileSelectorWidth = width;
+      savePreferences(this.$state);
+    },
+    
+    // 更新預覽面板寬度
+    setPreviewPanelWidth(width: number) {
+      this.previewPanelWidth = width;
       savePreferences(this.$state);
     },
     

@@ -21,6 +21,7 @@ class AnalysisService:
         """分析 .int 檔案並回傳圖像數據"""
         try:
             if not os.path.exists(file_path):
+                logger.error(f"檔案不存在: {file_path}")
                 return {"success": False, "error": f"檔案不存在: {file_path}"}
             
             # 提取參數，從 file_info 或者從檔案名字解析
@@ -33,29 +34,34 @@ class AnalysisService:
                 if "scale" in file_info:
                     try:
                         scale = float(file_info["scale"])
+                        logger.info(f"從參數獲取到縮放比例: {scale}")
                     except (ValueError, TypeError):
-                        pass
+                        logger.warning(f"無法轉換縮放比例: {file_info['scale']}")
                 
                 if "physUnit" in file_info:
                     phys_unit = file_info["physUnit"]
+                    logger.info(f"從參數獲取到物理單位: {phys_unit}")
                 
                 if "parameters" in file_info and file_info["parameters"]:
                     params = file_info["parameters"]
                     if "xPixel" in params:
                         try:
                             x_pixels = int(params["xPixel"])
+                            logger.info(f"從參數獲取到 X 像素數: {x_pixels}")
                         except (ValueError, TypeError):
-                            pass
+                            logger.warning(f"無法轉換 X 像素數: {params['xPixel']}")
                     if "yPixel" in params:
                         try:
                             y_pixels = int(params["yPixel"])
+                            logger.info(f"從參數獲取到 Y 像素數: {y_pixels}")
                         except (ValueError, TypeError):
-                            pass
+                            logger.warning(f"無法轉換 Y 像素數: {params['yPixel']}")
             
             # 如果沒提供參數，嘗試從檔案名解析對應的 txt 檔案來獲取參數
             if scale is None or x_pixels is None or y_pixels is None:
                 txt_path = AnalysisService._find_corresponding_txt_file(file_path)
                 if txt_path:
+                    logger.info(f"找到對應的 TXT 檔案: {txt_path}")
                     txt_parser = TxtParser(txt_path)
                     try:
                         metadata = txt_parser.parse()
@@ -64,14 +70,16 @@ class AnalysisService:
                         if x_pixels is None and "xPixel" in metadata:
                             try:
                                 x_pixels = int(metadata["xPixel"])
+                                logger.info(f"從 TXT 檔案獲取到 X 像素數: {x_pixels}")
                             except (ValueError, TypeError):
-                                pass
+                                logger.warning(f"無法轉換 X 像素數: {metadata['xPixel']}")
                         
                         if y_pixels is None and "yPixel" in metadata:
                             try:
                                 y_pixels = int(metadata["yPixel"])
+                                logger.info(f"從 TXT 檔案獲取到 Y 像素數: {y_pixels}")
                             except (ValueError, TypeError):
-                                pass
+                                logger.warning(f"無法轉換 Y 像素數: {metadata['yPixel']}")
                         
                         # 查找對應的檔案描述以獲取 scale 和 phys_unit
                         int_filename = os.path.basename(file_path)
@@ -81,11 +89,13 @@ class AnalysisService:
                                     try:
                                         scale_str = desc['Scale']
                                         scale = float(scale_str)
+                                        logger.info(f"從 TXT 檔案獲取到縮放比例: {scale}")
                                     except (ValueError, TypeError):
-                                        pass
+                                        logger.warning(f"無法轉換縮放比例: {scale_str}")
                                 
                                 if 'PhysUnit' in desc:
                                     phys_unit = desc['PhysUnit']
+                                    logger.info(f"從 TXT 檔案獲取到物理單位: {phys_unit}")
                                 
                                 break
                     except Exception as e:
@@ -103,22 +113,29 @@ class AnalysisService:
                 logger.warning(f"無法獲取像素尺寸，使用預設值 512x512")
             
             # 使用 IntParser 解析檔案
+            logger.info(f"開始解析 INT 檔案: {file_path}")
             parser = IntParser(file_path, scale, x_pixels, y_pixels)
             image_data = parser.parse()
+            logger.info(f"INT 檔案解析完成，資料形狀: {image_data.shape}")
             
             # 生成圖像
-            fig, ax = plt.subplots(figsize=(10, 8))
+            logger.info(f"開始生成預覽圖")
+            fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
             im = ax.imshow(image_data, cmap='viridis')
-            fig.colorbar(im, ax=ax, label=f'高度 ({phys_unit})')
-            ax.set_title(f'掃描圖像: {os.path.basename(file_path)}')
+            plt.colorbar(im, ax=ax, label=f'高度 ({phys_unit})')
+            ax.set_title(f'形貌預覽: {os.path.basename(file_path)}')
             ax.set_xlabel('X 像素')
             ax.set_ylabel('Y 像素')
             
             # 將圖像轉為 base64 字符串
             buf = io.BytesIO()
+            fig.tight_layout()
             fig.savefig(buf, format='png', dpi=100)
             buf.seek(0)
-            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            img_data = buf.read()
+            img_size = len(img_data)
+            logger.info(f"預覽圖生成成功，大小: {img_size} bytes")
+            img_base64 = base64.b64encode(img_data).decode('utf-8')
             buf.close()
             plt.close(fig)
             
@@ -145,6 +162,8 @@ class AnalysisService:
             
         except Exception as e:
             logger.error(f"分析 INT 檔案時出錯: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {"success": False, "error": str(e)}
     
     @staticmethod

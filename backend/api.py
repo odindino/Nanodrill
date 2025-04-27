@@ -3,7 +3,7 @@ import re
 import logging
 import webview
 from datetime import datetime
-from .core.analysis_service import AnalysisService
+from core.analysis_service import AnalysisService
 
 # 設置日誌
 logging.basicConfig(level=logging.DEBUG, 
@@ -144,6 +144,55 @@ class NanodrillAPI:
             logger.error(f"獲取 TXT 檔案內容時出錯: {str(e)}")
             return {"success": False, "error": str(e)}
     
+    def get_int_file_preview(self, txt_file_path):
+        """獲取與 txt 檔案相關聯的 INT 檔案預覽圖"""
+        try:
+            # 檢查檔案是否存在
+            if not os.path.exists(txt_file_path):
+                logger.error(f"檔案不存在: {txt_file_path}")
+                return {"success": False, "error": f"檔案不存在: {txt_file_path}"}
+            
+            # 獲取 txt 檔案的內容和參數
+            logger.info(f"正在解析 TXT 檔案: {txt_file_path}")
+            txt_content_result = self.get_txt_file_content(txt_file_path)
+            if not txt_content_result["success"]:
+                logger.error(f"無法讀取 TXT 檔案: {txt_content_result.get('error', '未知錯誤')}")
+                return {"success": False, "error": txt_content_result.get("error", "無法讀取 TXT 檔案")}
+            
+            # 找到相關的 TopoFwd 檔案
+            topo_file = None
+            for related_file in txt_content_result["relatedFiles"]:
+                if "TopoFwd" in related_file["name"] and related_file["name"].endswith(".int"):
+                    topo_file = related_file
+                    break
+            
+            if not topo_file:
+                logger.error(f"找不到相關的 TopoFwd.int 檔案，txt 檔案: {txt_file_path}")
+                return {"success": False, "error": "找不到相關的 TopoFwd.int 檔案"}
+            
+            logger.info(f"找到 INT 檔案: {topo_file['path']}")
+            
+            # 使用 AnalysisService 來生成預覽圖
+            file_info = {
+                "scale": topo_file.get("scale", None),
+                "physUnit": topo_file.get("physUnit", "nm"),
+                "parameters": txt_content_result["parameters"]
+            }
+            
+            logger.info(f"開始生成預覽圖，scale: {file_info['scale']}, unit: {file_info['physUnit']}")
+            preview_result = AnalysisService.analyze_int_file(topo_file["path"], file_info)
+            
+            if not preview_result.get("success", False):
+                logger.error(f"預覽圖生成失敗: {preview_result.get('error', '未知錯誤')}")
+                return {"success": False, "error": preview_result.get("error", "預覽圖生成失敗")}
+            
+            logger.info(f"預覽圖生成成功，圖像大小: {len(preview_result.get('image', ''))} 字元")
+            return preview_result
+        
+        except Exception as e:
+            logger.error(f"獲取 INT 預覽圖時出錯: {str(e)}")
+            return {"success": False, "error": f"獲取預覽圖時發生錯誤: {str(e)}"}
+            
     def analyze_int_file(self, file_path, parent_file_info=None):
         """分析 .int 檔案"""
         try:
