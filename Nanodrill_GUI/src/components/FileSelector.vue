@@ -164,9 +164,9 @@
     
     <!-- 預覽面板 -->
     <div v-if="showPreviewPanel" 
-         ref="previewPanelRef"
-         class="h-full flex flex-col bg-white shadow-md border-l border-gray-200 transition-all duration-300 ease-in-out overflow-hidden"
-         :style="{ width: previewPanelWidth + 'px' }">
+        ref="previewPanelRef"
+        class="h-full flex flex-col bg-white shadow-md border-l border-gray-200 transition-all duration-300 ease-in-out overflow-hidden"
+        :style="{ width: previewPanelWidth + 'px' }">
       
       <!-- 預覽面板頭部 -->
       <div class="flex items-center justify-between px-4 py-3 bg-gray-100 border-b border-gray-200">
@@ -227,9 +227,9 @@
               <!-- 圖像顯示區域 -->
               <div class="flex-grow overflow-auto p-4 bg-gray-50">
                 <img v-if="previewImage" 
-                     :src="'data:image/png;base64,' + previewImage" 
-                     alt="形貌預覽" 
-                     class="w-full max-w-full h-auto rounded border border-gray-200 bg-white" />
+                    :src="'data:image/png;base64,' + previewImage" 
+                    alt="形貌預覽" 
+                    class="w-full max-w-full h-auto rounded border border-gray-200 bg-white" />
                 <div v-else class="flex items-center justify-center h-full text-gray-500">
                   無法載入形貌圖像
                 </div>
@@ -325,8 +325,8 @@
                 </div>
                 <div class="p-4">
                   <div v-for="(desc, index) in fileDescriptions" 
-                       :key="index" 
-                       class="mb-4 last:mb-0 border border-gray-200 rounded-lg overflow-hidden">
+                      :key="index" 
+                      class="mb-4 last:mb-0 border border-gray-200 rounded-lg overflow-hidden">
                     <div class="bg-gray-50 px-3 py-2 font-medium text-sm border-b border-gray-200">
                       {{ desc.Caption || desc.FileName }}
                     </div>
@@ -725,7 +725,7 @@ export default defineComponent({
       document.addEventListener('mousemove', onMouseMoveForPanel);
       document.addEventListener('mouseup', onMouseUpForPanel);
     };
-    
+
     // 開始調整預覽面板寬度
     const startResizingPreviewWidth = (e: MouseEvent) => {
       e.preventDefault();
@@ -737,7 +737,7 @@ export default defineComponent({
       document.addEventListener('mousemove', onMouseMoveForPreviewPanel);
       document.addEventListener('mouseup', onMouseUpForPreviewPanel);
     };
-    
+
     // 滑鼠移動時調整選擇器寬度
     const onMouseMoveForPanel = (e: MouseEvent) => {
       if (!isResizing.value) return;
@@ -749,7 +749,7 @@ export default defineComponent({
       // 通知父元件寬度已變更
       emit('width-changed', selectorWidth.value);
     };
-    
+
     // 滑鼠移動時調整預覽面板寬度
     const onMouseMoveForPreviewPanel = (e: MouseEvent) => {
       if (!isResizingPreview.value) return;
@@ -758,7 +758,7 @@ export default defineComponent({
       // 設定最小和最大寬度
       previewPanelWidth.value = Math.max(350, Math.min(900, newWidth));
     };
-    
+
     // 滑鼠放開時結束調整選擇器寬度，並保存設定
     const onMouseUpForPanel = () => {
       isResizing.value = false;
@@ -768,7 +768,7 @@ export default defineComponent({
       // 保存選擇器寬度到偏好設定
       userPreferencesStore.setFileSelectorWidth(selectorWidth.value);
     };
-    
+
     // 滑鼠放開時結束調整預覽面板寬度，並保存設定
     const onMouseUpForPreviewPanel = () => {
       isResizingPreview.value = false;
@@ -927,3 +927,114 @@ export default defineComponent({
   }
 });
 </script>
+
+<style scoped>
+/* 可調整寬度的把手 */
+.resize-handle {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 20;
+}
+
+.resize-handle:hover, .resize-handle:active {
+  background-color: rgba(0, 120, 212, 0.1);
+}
+
+/* 可調整預覽面板寬度的把手 */
+.preview-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 20;
+}
+
+.preview-resize-handle:hover, .preview-resize-handle:active {
+  background-color: rgba(0, 120, 212, 0.1);
+}
+
+.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/* 欄位調整把手 */
+.column-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.column-resizer:hover {
+  background-color: rgba(0, 120, 212, 0.2);
+}
+
+/* 確保表頭固定在頂部 */
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #f9fafb;
+}
+
+/* 確保表格單元格內容正確顯示 */
+td {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 預覽面板過渡動畫 */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+/* 確保預覽面板中的形貌圖不會過大 */
+.preview-image {
+  max-height: 60vh;
+  width: auto;
+  object-fit: contain;
+}
+
+/* 增強重要參數區塊的視覺效果 */
+.parameter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.parameter-item {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.parameter-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.parameter-value {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1f2937;
+}
+</style>

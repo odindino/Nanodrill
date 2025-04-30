@@ -29,6 +29,8 @@ class AnalysisService:
             x_pixels = None
             y_pixels = None
             phys_unit = "nm"  # 預設單位
+            x_scan_range = None
+            y_scan_range = None
             
             if file_info:
                 if "scale" in file_info:
@@ -56,6 +58,21 @@ class AnalysisService:
                             logger.info(f"從參數獲取到 Y 像素數: {y_pixels}")
                         except (ValueError, TypeError):
                             logger.warning(f"無法轉換 Y 像素數: {params['yPixel']}")
+                    
+                    # 獲取掃描範圍
+                    if "XScanRange" in params:
+                        try:
+                            x_scan_range = float(params["XScanRange"])
+                            logger.info(f"從參數獲取到 X 掃描範圍: {x_scan_range}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"無法轉換 X 掃描範圍: {params['XScanRange']}")
+                    
+                    if "YScanRange" in params:
+                        try:
+                            y_scan_range = float(params["YScanRange"])
+                            logger.info(f"從參數獲取到 Y 掃描範圍: {y_scan_range}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"無法轉換 Y 掃描範圍: {params['YScanRange']}")
             
             # 如果沒提供參數，嘗試從檔案名解析對應的 txt 檔案來獲取參數
             if scale is None or x_pixels is None or y_pixels is None:
@@ -80,6 +97,21 @@ class AnalysisService:
                                 logger.info(f"從 TXT 檔案獲取到 Y 像素數: {y_pixels}")
                             except (ValueError, TypeError):
                                 logger.warning(f"無法轉換 Y 像素數: {metadata['yPixel']}")
+                        
+                        # 獲取掃描範圍
+                        if x_scan_range is None and "XScanRange" in metadata:
+                            try:
+                                x_scan_range = float(metadata["XScanRange"])
+                                logger.info(f"從 TXT 檔案獲取到 X 掃描範圍: {x_scan_range}")
+                            except (ValueError, TypeError):
+                                logger.warning(f"無法轉換 X 掃描範圍: {metadata['XScanRange']}")
+                        
+                        if y_scan_range is None and "YScanRange" in metadata:
+                            try:
+                                y_scan_range = float(metadata["YScanRange"])
+                                logger.info(f"從 TXT 檔案獲取到 Y 掃描範圍: {y_scan_range}")
+                            except (ValueError, TypeError):
+                                logger.warning(f"無法轉換 Y 掃描範圍: {metadata['YScanRange']}")
                         
                         # 查找對應的檔案描述以獲取 scale 和 phys_unit
                         int_filename = os.path.basename(file_path)
@@ -112,20 +144,45 @@ class AnalysisService:
                 y_pixels = 512
                 logger.warning(f"無法獲取像素尺寸，使用預設值 512x512")
             
+            # 如果沒有掃描範圍，設定預設值
+            if x_scan_range is None:
+                x_scan_range = 100.0
+                logger.warning(f"無法獲取 X 掃描範圍，使用預設值 100 {phys_unit}")
+            
+            if y_scan_range is None:
+                y_scan_range = 100.0
+                logger.warning(f"無法獲取 Y 掃描範圍，使用預設值 100 {phys_unit}")
+            
             # 使用 IntParser 解析檔案
             logger.info(f"開始解析 INT 檔案: {file_path}")
             parser = IntParser(file_path, scale, x_pixels, y_pixels)
             image_data = parser.parse()
             logger.info(f"INT 檔案解析完成，資料形狀: {image_data.shape}")
             
+            # 檔案名稱 (只取基本名稱)
+            base_filename = os.path.basename(file_path)
+            
             # 生成圖像
             logger.info(f"開始生成預覽圖")
             fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
-            im = ax.imshow(image_data, cmap='viridis')
-            plt.colorbar(im, ax=ax, label=f'高度 ({phys_unit})')
-            ax.set_title(f'形貌預覽: {os.path.basename(file_path)}')
-            ax.set_xlabel('X 像素')
-            ax.set_ylabel('Y 像素')
+            
+            # 創建X和Y坐標網格，用掃描範圍而不是像素數
+            x = np.linspace(0, x_scan_range, x_pixels)
+            y = np.linspace(0, y_scan_range, y_pixels)
+            
+            # 畫出圖像，並設置正確的X和Y軸範圍
+            im = ax.imshow(image_data, cmap='Oranges', extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
+            
+            # 設置軸標籤
+            ax.set_xlabel(f'X ({phys_unit})')
+            ax.set_ylabel(f'Y ({phys_unit})')
+            
+            # 設置標題 (只使用檔案名)
+            ax.set_title(base_filename)
+            
+            # 設置colorbar
+            cbar = plt.colorbar(im, ax=ax)
+            cbar.set_label(f'Height ({phys_unit})')
             
             # 將圖像轉為 base64 字符串
             buf = io.BytesIO()
@@ -155,7 +212,9 @@ class AnalysisService:
                 "statistics": stats,
                 "dimensions": {
                     "width": x_pixels,
-                    "height": y_pixels
+                    "height": y_pixels,
+                    "xRange": x_scan_range,
+                    "yRange": y_scan_range
                 },
                 "physUnit": phys_unit
             }
