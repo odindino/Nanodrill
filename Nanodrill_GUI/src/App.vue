@@ -2,7 +2,7 @@
 <template>
   <div class="flex flex-col h-screen bg-neutral-50 overflow-hidden">
     <div class="flex flex-1 overflow-hidden">
-      <SideBar @menu-item-clicked="handleMenuItemClick" />
+      <SideBar @menu-item-clicked="handleMenuItemClick" :activeItem="currentView" />
       
       <div class="relative flex flex-1 overflow-hidden">
         <transition name="slide">
@@ -11,6 +11,7 @@
             @close="hideFileSelector"
             @width-changed="updateFileSelectorWidth"
             :initial-files="spmDataStore.files"
+            @file-selected-for-analysis="openFileForAnalysis"
             class="absolute top-0 left-0 z-10 h-full"
           />
         </transition>
@@ -19,7 +20,7 @@
               :class="{ 'ml-[450px]': showFileSelector }"
               :style="showFileSelector ? { width: `calc(100% - ${fileSelectorWidth}px)` } : {}"
         >
-          <div v-if="!selectedFile" class="flex flex-col items-center justify-center h-full text-center text-neutral-600">
+          <div v-if="!spmDataStore.currentView || spmDataStore.currentView === 'welcome'" class="flex flex-col items-center justify-center h-full text-center text-neutral-600">
             <h2 class="mb-4 text-2xl font-semibold">歡迎使用 SPM 數據分析工具</h2>
             <p class="text-base">請從左側功能欄選擇「資料集」以開始</p>
             
@@ -35,7 +36,9 @@
             </div>
           </div>
           
-          <DataView v-else />
+          <DataView v-else-if="spmDataStore.currentView === 'data-view'" />
+          
+          <AnalysisView v-else-if="spmDataStore.currentView === 'analysis'" />
         </main>
       </div>
     </div>
@@ -51,6 +54,7 @@ import { defineComponent, ref, computed, watch, onMounted } from 'vue';
 import SideBar from '@/components/SideBar.vue';
 import FileSelector from '@/components/FileSelector.vue';
 import DataView from '@/components/DataView.vue';
+import AnalysisView from '@/components/AnalysisView.vue';
 import { useSpmDataStore } from './stores/spmDataStore';
 import { useUserPreferencesStore } from './stores/userPreferencesStore';
 
@@ -59,7 +63,8 @@ export default defineComponent({
   components: {
     SideBar,
     FileSelector,
-    DataView
+    DataView,
+    AnalysisView
   },
   setup() {
     const spmDataStore = useSpmDataStore();
@@ -70,11 +75,15 @@ export default defineComponent({
     
     const selectedFile = computed(() => spmDataStore.selectedFile);
     const lastDirectory = computed(() => userPreferencesStore.lastDirectory);
+    const currentView = computed(() => spmDataStore.currentView);
     
     // 處理側邊欄選單項目點擊
     const handleMenuItemClick = (menuItem: string) => {
       if (menuItem === 'dataset') {
         toggleFileSelector();
+      } else if (menuItem === 'analysis') {
+        // 切換到分析視圖
+        spmDataStore.setCurrentView('analysis');
       }
     };
     
@@ -91,6 +100,39 @@ export default defineComponent({
     // 更新檔案選擇器寬度
     const updateFileSelectorWidth = (width: number) => {
       fileSelectorWidth.value = width;
+    };
+    
+    // 開啟檔案進行分析
+    const openFileForAnalysis = async (file: any) => {
+      // 檢查檔案內容是否已載入
+      let fileContent = spmDataStore.fileContents[file.path];
+      
+      if (!fileContent) {
+        try {
+          // 獲取檔案內容
+          const result = await window.pywebview.api.get_txt_file_content(file.path);
+          if (result.success) {
+            fileContent = {
+              content: result.content,
+              parameters: result.parameters,
+              relatedFiles: result.relatedFiles
+            };
+            spmDataStore.setFileContent(file.path, fileContent);
+          } else {
+            console.error('無法讀取文件內容:', result.error);
+            return;
+          }
+        } catch (error) {
+          console.error('讀取檔案時出錯:', error);
+          return;
+        }
+      }
+      
+      // 添加到分析標籤頁
+      spmDataStore.addAnalysisTab(file, fileContent);
+      
+      // 隱藏檔案選擇器
+      hideFileSelector();
     };
     
     // 格式化目錄路徑顯示（只顯示最後一部分）
@@ -145,11 +187,13 @@ export default defineComponent({
       fileSelectorWidth,
       selectedFile,
       lastDirectory,
+      currentView,
       handleMenuItemClick,
       hideFileSelector,
       updateFileSelectorWidth,
       formatDirectoryPath,
-      openLastDirectory
+      openLastDirectory,
+      openFileForAnalysis
     };
   }
 });

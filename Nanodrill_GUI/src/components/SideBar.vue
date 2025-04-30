@@ -16,7 +16,7 @@
       <ul>
         <li 
           class="flex items-center px-5 py-3 cursor-pointer transition-all duration-200 hover:bg-neutral-700"
-          :class="{ 'bg-secondary-600 border-l-4 border-secondary-300 pl-4': activeItem === 'dataset' }"
+          :class="{ 'bg-secondary-600 border-l-4 border-secondary-300 pl-4': activeItem === 'dataset' || activeItem === 'data-view' }"
           @click="handleItemClick('dataset')"
         >
           <span class="mr-3 text-secondary-300">
@@ -66,21 +66,23 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue';
+import { defineComponent, ref, watch } from 'vue';
 
 export default defineComponent({
   name: 'SideBar',
+  props: {
+    activeItem: {
+      type: String,
+      default: ''
+    }
+  },
   emits: ['menu-item-clicked'],
   setup(props, { emit }) {
-    const activeItem = ref<string | null>('dataset');
-    
     const handleItemClick = (item: string) => {
-      activeItem.value = item;
       emit('menu-item-clicked', item);
     };
     
     return {
-      activeItem,
       handleItemClick
     };
   }

@@ -105,6 +105,7 @@
                   isPreviewingFile(file) ? 'bg-blue-50' : '',
                   'hover:bg-gray-50'
                 ]"
+                @dblclick="openFileForAnalysis(file)"
               >
                 <td class="px-4 py-2 text-sm" :style="{ maxWidth: columnWidths.filename + 'px' }">
                   <div class="flex items-center space-x-2 overflow-hidden">
@@ -140,6 +141,15 @@
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </button>
+                    <button 
+                      @click="openFileForAnalysis(file)" 
+                      class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-1 focus:ring-green-500 focus:ring-offset-1"
+                      title="進行分析"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                       </svg>
                     </button>
                   </div>
@@ -401,7 +411,7 @@ declare global {
 
 export default defineComponent({
   name: 'FileSelector',
-  emits: ['close', 'width-changed'],
+  emits: ['close', 'width-changed', 'file-selected-for-analysis'],
   setup(props, { emit }) {
     const spmDataStore = useSpmDataStore();
     const userPreferencesStore = useUserPreferencesStore();
@@ -837,6 +847,17 @@ export default defineComponent({
         closePreview();
       }
     };
+
+    // 打開檔案進行分析
+    const openFileForAnalysis = (file: FileInfo) => {
+      // 只允許 txt 檔案使用分析功能
+      if (file.type !== 'txt') {
+        // 可以選擇顯示錯誤提示
+        return;
+      }
+      
+      emit('file-selected-for-analysis', file);
+    };
     
     // 組件掛載時添加鍵盤事件監聽
     onMounted(() => {
@@ -922,7 +943,8 @@ export default defineComponent({
       startResizingPreviewWidth,
       startResize,
       formatNumber,
-      formatDateTime
+      formatDateTime,
+      openFileForAnalysis
     };
   }
 });
