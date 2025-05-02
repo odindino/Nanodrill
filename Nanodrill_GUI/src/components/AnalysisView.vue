@@ -49,18 +49,6 @@
                 <h3 class="text-sm font-medium text-gray-700 mb-2">選擇資料檔案</h3>
                 
                 <div class="mb-4">
-                  <label class="text-xs text-gray-500 block mb-1">資料類型</label>
-                  <select 
-                    v-model="selectedFileType" 
-                    class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                  >
-                    <option value="topo">形貌圖 (Topography)</option>
-                    <option value="iv">I-V 曲線</option>
-                    <option value="lia">Lock-in 訊號</option>
-                  </select>
-                </div>
-                
-                <div class="mb-4">
                   <label class="text-xs text-gray-500 block mb-1">檔案選擇</label>
                   <select 
                     v-model="selectedFileId" 
@@ -84,6 +72,16 @@
                   <span v-if="isLoading">載入中...</span>
                   <span v-else>載入檔案</span>
                 </button>
+                
+                <!-- 顯示 txt 文件內容 -->
+                <div class="mt-4 border-t border-gray-200 pt-4">
+                    <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
+                    <div class="bg-gray-50 rounded-md p-3 overflow-auto max-h-96 text-xs font-mono">
+                        <pre v-if="activeTab && activeTab.txtContent">{{ activeTab.txtContent }}</pre>
+                        <p v-else class="text-gray-500">無檔案資訊</p>
+                    </div>
+                </div>
+
               </div>
               
               <!-- 假如載入的是形貌圖，提供影像處理功能 -->
@@ -294,34 +292,21 @@
       const isLoading = ref<boolean>(false);
       const loadError = ref<string>('');
       
-      // 根據選擇的檔案類型和標籤頁內容，過濾可用的檔案
+      // 獲取可用的檔案
       const availableFiles = computed(() => {
         if (!activeTab.value || !activeTab.value.relatedFiles) {
-          return [];
-        }
-        
-        const relatedFiles = activeTab.value.relatedFiles;
-        
-        switch (selectedFileType.value) {
-          case 'topo':
-            return relatedFiles.filter(file => 
-              file.name.toLowerCase().includes('topo') && 
-              file.name.toLowerCase().endsWith('.int')
-            );
-          case 'iv':
-            return relatedFiles.filter(file => 
-              file.name.toLowerCase().includes('it_to_pc_matrix') && 
-              file.name.toLowerCase().endsWith('.dat')
-            );
-          case 'lia':
-            return relatedFiles.filter(file => 
-              file.name.toLowerCase().includes('lia') && 
-              (file.name.toLowerCase().endsWith('.int') || file.name.toLowerCase().endsWith('.dat'))
-            );
-          default:
             return [];
         }
-      });
+        
+        // 返回所有相關檔案，按檔案類型過濾
+        // 輸出所有相關檔案的信息
+        console.log('相關檔案數量:', activeTab.value.relatedFiles.length);
+        activeTab.value.relatedFiles.forEach(file => {
+            console.log('相關檔案:', file.name, file.path);
+        });
+        
+        return activeTab.value.relatedFiles;
+        });
       
       // 切換標籤頁
       const switchTab = (tabId: string) => {
@@ -341,36 +326,41 @@
         loadError.value = '';
         
         try {
-          // 檢查檔案類型
-          const fileName = availableFiles.value.find(f => f.path === selectedFileId.value)?.name || '';
-          
-          if (selectedFileType.value === 'topo' && fileName.endsWith('.int')) {
+            // 檢查檔案類型
+            const fileName = availableFiles.value.find(f => f.path === selectedFileId.value)?.name || '';
+            
+            // 輸出路徑信息以供調試
+            console.log('嘗試載入檔案:', selectedFileId.value);
+            console.log('檔案名稱:', fileName);
+            
+            if (fileName.toLowerCase().endsWith('.int')) {
             // 處理 .int 檔案 - 調用後端 API 獲取預覽圖像
             const result = await window.pywebview.api.get_int_file_preview(selectedFileId.value);
             
             if (result.success) {
-              // 更新標籤頁的數據
-              spmDataStore.updateAnalysisTabData(activeTabId.value, {
+                // 更新標籤頁的數據
+                spmDataStore.updateAnalysisTabData(activeTabId.value, {
                 imageData: result.image,
                 statistics: result.statistics,
                 physUnit: result.physUnit || 'nm',
                 dimensions: result.dimensions,
                 currentFileName: fileName
-              });
+                });
             } else {
-              loadError.value = result.error || '載入檔案時發生錯誤';
+                loadError.value = result.error || '載入檔案時發生錯誤';
+                console.error('載入檔案失敗:', result.error);
             }
-          } else {
+            } else {
             // 處理其他類型檔案 (未實現)
             loadError.value = '暫不支援此檔案類型';
-          }
+            }
         } catch (error) {
-          console.error('載入檔案錯誤:', error);
-          loadError.value = `載入檔案時發生錯誤: ${error}`;
+            console.error('載入檔案錯誤:', error);
+            loadError.value = `載入檔案時發生錯誤: ${error}`;
         } finally {
-          isLoading.value = false;
+            isLoading.value = false;
         }
-      };
+        };
       
       // 格式化數字，保留兩位小數
       const formatNumber = (value: number) => {

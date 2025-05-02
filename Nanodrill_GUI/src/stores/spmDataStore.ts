@@ -119,8 +119,12 @@ export const useSpmDataStore = defineStore('spmData', {
         // 產生唯一 ID
         const tabId = `tab-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         
-        // 獲取來源目錄路徑
-        const sourcePath = file.path.substring(0, file.path.lastIndexOf('/') + 1);
+        // 處理檔案路徑，確保使用正確的分隔符
+        let filePath = file.path;
+        let dirPath = filePath.substring(0, filePath.lastIndexOf(filePath.includes('/') ? '/' : '\\') + 1);
+        
+        console.log('檔案路徑:', filePath);
+        console.log('目錄路徑:', dirPath);
         
         // 創建新標籤頁
         const newTab: AnalysisTab = {
@@ -128,7 +132,7 @@ export const useSpmDataStore = defineStore('spmData', {
           title: file.name,
           fileId: file.path,
           fileType: 'topo', // 預設為形貌圖類型
-          sourcePath: sourcePath, // 記錄檔案來源路徑
+          sourcePath: dirPath, // 記錄檔案來源路徑
           relatedFiles: content.relatedFiles,
           colormap: 'Oranges', // 預設色彩映射
           zScale: 1.0, // 預設高度縮放
