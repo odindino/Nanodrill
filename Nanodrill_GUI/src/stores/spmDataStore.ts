@@ -42,6 +42,7 @@ export interface AnalysisTab {
   colormap: string;
   zScale: number;
   txtContent?: string;
+  parameters?: Record<string, string>;
 }
 
 export const useSpmDataStore = defineStore('spmData', {
@@ -136,7 +137,8 @@ export const useSpmDataStore = defineStore('spmData', {
           relatedFiles: content.relatedFiles,
           colormap: 'Oranges', // 預設色彩映射
           zScale: 1.0, // 預設高度縮放
-          txtContent: content.content // 存儲txt文件內容
+          txtContent: content.content, // 存儲txt文件內容
+          parameters: content.parameters
         };
         
         // 添加到標籤頁列表

@@ -73,13 +73,29 @@
                   <span v-else>載入檔案</span>
                 </button>
                 
-                <!-- 顯示 txt 文件內容 -->
+                <!-- 檔案資訊區塊 - 改進版 -->
                 <div class="mt-4 border-t border-gray-200 pt-4">
-                    <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
-                    <div class="bg-gray-50 rounded-md p-3 overflow-auto max-h-96 text-xs font-mono">
-                        <pre v-if="activeTab && activeTab.txtContent">{{ activeTab.txtContent }}</pre>
-                        <p v-else class="text-gray-500">無檔案資訊</p>
+                  <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
+                  
+                  <div v-if="activeTab && activeTab.txtContent" class="bg-white rounded-lg border border-gray-200 overflow-y-auto max-h-80">
+                    <!-- 基本參數 -->
+                    <div class="p-3">
+                      <h4 class="font-medium text-sm border-b pb-1 mb-3">基本參數</h4>
+                      
+                      <div class="grid grid-cols-1 gap-1.5">
+                        <!-- 參數項目 - 每個參數一行 -->
+                        <div v-for="(value, key) in displayParameters" :key="key" class="info-row flex">
+                          <div class="text-sm font-medium text-gray-700 w-44 flex-shrink-0">{{ key }}:</div>
+                          <div class="text-sm text-gray-900 flex-1">{{ value }}</div>
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                  
+                  <!-- 無檔案資訊時的提示 -->
+                  <div v-else class="bg-gray-50 rounded-md p-4 text-center text-gray-500">
+                    <p>無檔案資訊</p>
+                  </div>
                 </div>
 
               </div>
@@ -370,6 +386,99 @@
         if (value === undefined || value === null) return 'N/A';
         return value.toFixed(2);
       };
+
+      const displayParameters = computed(() => {
+        if (!parameters.value) return {};
+        
+        // 定義想要顯示的參數順序
+        const paramOrder = [
+          'Version', 'Date', 'Time', 'UserName',
+          'SetPoint', 'SetPointPhysUnit', 'FeedBackModus', 'Bias',
+          'BiasPhysUnit', 'Ki', 'Kp', 'FeedbackOnCh',
+          'XScanRange', 'YScanRange', 'XPhysUnit', 'YPhysUnit',
+          'Speed', 'LineRate', 'Angle', 'xPixel',
+          'yPixel', 'yCenter', 'xCenter', 'LockInFreq',
+          'LockInFreqPhysUnit', 'LockInAmpl', 'LockInAmplPhysUnit'
+        ];
+        
+        // 格式化特定參數顯示
+        const formatted = { ...parameters.value };
+        
+        // 為某些參數添加單位或格式
+        if (formatted.Speed) formatted.Speed = `${formatted.Speed} ; lines/sec`;
+        if (formatted.LineRate) formatted.LineRate = `${formatted.LineRate} ; lines/sec`;
+        
+        // 按照順序建立最終顯示參數
+        const result: Record<string, string> = {};
+        paramOrder.forEach(param => {
+          if (formatted[param]) {
+            result[param] = formatted[param];
+          }
+        });
+        
+        return result;
+      });
+
+      // 檔案參數
+      const parameters = computed(() => {
+        if (!activeTab.value || !activeTab.value.txtContent) return {};
+        
+        // 如果標籤頁已經有解析好的參數，直接返回
+        if (activeTab.value.parameters) {
+          return activeTab.value.parameters;
+        }
+        
+        // 否則嘗試從 txtContent 中解析參數
+        try {
+          const content = activeTab.value.txtContent;
+          const parameters: Record<string, string> = {};
+          
+          // 解析版本信息
+          const versionMatch = content.match(/Version\s*:\s*([^\n]+)/);
+          if (versionMatch) parameters.Version = versionMatch[1].trim();
+          
+          // 解析日期
+          const dateMatch = content.match(/Date\s*:\s*([^\n]+)/);
+          if (dateMatch) parameters.Date = dateMatch[1].trim();
+          
+          // 解析時間
+          const timeMatch = content.match(/Time\s*:\s*([^\n]+)/);
+          if (timeMatch) parameters.Time = timeMatch[1].trim();
+          
+          // 解析用戶名
+          const userNameMatch = content.match(/UserName\s*:\s*([^\n]+)/);
+          if (userNameMatch) parameters.UserName = userNameMatch[1].trim();
+          
+          // 解析更多參數...
+          const paramPatterns = [
+            'SetPoint', 'SetPointPhysUnit', 'FeedBackModus', 'Bias', 'BiasPhysUnit',
+            'Ki', 'Kp', 'FeedbackOnCh', 'XScanRange', 'YScanRange', 'XPhysUnit',
+            'YPhysUnit', 'Speed', 'LineRate', 'Angle', 'xPixel', 'yPixel',
+            'yCenter', 'xCenter', 'LockInFreq', 'LockInFreqPhysUnit', 'LockInAmpl',
+            'LockInAmplPhysUnit'
+          ];
+          
+          paramPatterns.forEach(param => {
+            const pattern = new RegExp(param + '\\s*:\\s*([^\\n]+)');
+            const match = content.match(pattern);
+            if (match) {
+              parameters[param] = match[1].trim();
+            }
+          });
+          
+          // 如果標籤頁中沒有存儲參數，則保存解析結果
+          if (activeTab.value && !activeTab.value.parameters) {
+            spmDataStore.updateAnalysisTabData(activeTabId.value, {
+              parameters: parameters
+            });
+          }
+          
+          return parameters;
+        } catch (error) {
+          console.error('解析參數時出錯:', error);
+          return {};
+        }
+      });
       
       // 當選擇的檔案類型改變時，重設選中的檔案
       watch(selectedFileType, () => {
@@ -410,6 +519,8 @@
         isLoading,
         loadError,
         availableFiles,
+        parameters,
+        displayParameters,
         switchTab,
         closeTab,
         loadSelectedFile,
@@ -418,3 +529,36 @@
     }
   });
   </script>
+
+<style scoped>
+.info-row {
+  white-space: nowrap;
+  display: flex;
+  padding: 4px 0;
+}
+
+.max-h-80 {
+  scrollbar-width: thin;
+  scrollbar-color: #ddd #f1f1f1;
+}
+
+/* 自定義滾動條樣式 */
+.max-h-80::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.max-h-80::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.max-h-80::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 4px;
+}
+
+.max-h-80::-webkit-scrollbar-thumb:hover {
+  background: #ccc;
+}
+</style>
