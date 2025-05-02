@@ -608,11 +608,11 @@
   position: absolute;
   top: 0;
   right: -6px; /* 向右移動一點 */
-  width: 12px; /* 增加寬度 */
+  width: 8px; /* 增加寬度 */
   height: 100%;
   cursor: col-resize;
   z-index: 20;
-  background-color: rgba(0, 100, 255, 0.2); /* 添加明顯的顏色 */
+  background-color: rgba(246, 248, 252, 0.4); /* 添加低調的顏色 */
 }
 
 .resize-handle:hover {
