@@ -39,68 +39,76 @@
   
         <!-- 標籤頁內容 -->
         <div v-if="activeTab" class="flex-grow overflow-hidden">
-          <div class="h-full flex p-4 space-x-4">
-            <!-- 左側控制面板 -->
-            <div class="w-64 flex-shrink-0 border border-gray-200 rounded-lg overflow-hidden">
-              <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 font-medium">控制面板</div>
-              
-              <!-- 檔案選擇區 -->
-              <div class="p-4">
-                <h3 class="text-sm font-medium text-gray-700 mb-2">選擇資料檔案</h3>
+      <div class="h-full flex p-4 space-x-4">
+        <!-- 左側控制面板 - 添加可調整寬度功能 -->
+        <div class="flex-shrink-0 border border-gray-200 rounded-lg overflow-hidden resizable-panel" 
+             :style="{ width: controlPanelWidth + 'px' }" 
+             ref="controlPanelRef">
+          <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 font-medium">控制面板</div>
+          
+          <!-- 檔案選擇區 -->
+          <div class="p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-2">選擇資料檔案</h3>
+            
+            <div class="mb-4">
+              <label class="text-xs text-gray-500 block mb-1">檔案選擇</label>
+              <select 
+                v-model="selectedFileId" 
+                class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                :disabled="availableFiles.length === 0"
+              >
+                <option v-for="file in availableFiles" :key="file.path" :value="file.path">
+                  {{ file.name }}
+                </option>
+              </select>
+              <p v-if="availableFiles.length === 0" class="text-xs text-gray-500 mt-1">
+                沒有可用的相關檔案
+              </p>
+            </div>
+            
+            <button 
+              @click="loadSelectedFile" 
+              class="w-full py-2 px-4 bg-primary text-white font-medium rounded transition-colors hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="!selectedFileId || isLoading"
+            >
+              <span v-if="isLoading">載入中...</span>
+              <span v-else>載入檔案</span>
+            </button>
+          </div>
+          
+          <!-- 其他面板內容... -->
+          
+          <!-- 檔案資訊區塊 -->
+          <div class="mt-4 border-t border-gray-200 pt-4 px-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
+            
+            <div v-if="activeTab && activeTab.txtContent" class="bg-white rounded-lg border border-gray-200 overflow-y-auto max-h-80">
+              <!-- 基本參數 -->
+              <div class="p-3">
+                <h4 class="font-medium text-sm border-b pb-1 mb-3">基本參數</h4>
                 
-                <div class="mb-4">
-                  <label class="text-xs text-gray-500 block mb-1">檔案選擇</label>
-                  <select 
-                    v-model="selectedFileId" 
-                    class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                    :disabled="availableFiles.length === 0"
-                  >
-                    <option v-for="file in availableFiles" :key="file.path" :value="file.path">
-                      {{ file.name }}
-                    </option>
-                  </select>
-                  <p v-if="availableFiles.length === 0" class="text-xs text-gray-500 mt-1">
-                    沒有可用的相關檔案
-                  </p>
-                </div>
-                
-                <button 
-                  @click="loadSelectedFile" 
-                  class="w-full py-2 px-4 bg-primary text-white font-medium rounded transition-colors hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  :disabled="!selectedFileId || isLoading"
-                >
-                  <span v-if="isLoading">載入中...</span>
-                  <span v-else>載入檔案</span>
-                </button>
-                
-                <!-- 檔案資訊區塊 - 改進版 -->
-                <div class="mt-4 border-t border-gray-200 pt-4">
-                  <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
-                  
-                  <div v-if="activeTab && activeTab.txtContent" class="bg-white rounded-lg border border-gray-200 overflow-y-auto max-h-80">
-                    <!-- 基本參數 -->
-                    <div class="p-3">
-                      <h4 class="font-medium text-sm border-b pb-1 mb-3">基本參數</h4>
-                      
-                      <div class="grid grid-cols-1 gap-1.5">
-                        <!-- 參數項目 - 每個參數一行 -->
-                        <div v-for="(value, key) in displayParameters" :key="key" class="info-row flex">
-                          <div class="text-sm font-medium text-gray-700 w-44 flex-shrink-0">{{ key }}:</div>
-                          <div class="text-sm text-gray-900 flex-1">{{ value }}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <!-- 無檔案資訊時的提示 -->
-                  <div v-else class="bg-gray-50 rounded-md p-4 text-center text-gray-500">
-                    <p>無檔案資訊</p>
+                <div class="grid grid-cols-1 gap-1.5">
+                  <!-- 參數項目 - 每個參數一行 -->
+                  <div v-for="(value, key) in displayParameters" :key="key" class="info-row flex">
+                    <div class="text-sm font-medium text-gray-700 w-44 flex-shrink-0">{{ key }}:</div>
+                    <div class="text-sm text-gray-900 flex-1">{{ value }}</div>
                   </div>
                 </div>
-
               </div>
+            </div>
+            
+            <!-- 無檔案資訊時的提示 -->
+            <div v-else class="bg-gray-50 rounded-md p-4 text-center text-gray-500">
+              <p>無檔案資訊</p>
+            </div>
+          </div>
+          
+          <!-- 可調整寬度的把手 -->
+          <div class="resize-handle" @mousedown="startResizing"></div>
+        </div>
               
               <!-- 假如載入的是形貌圖，提供影像處理功能 -->
+
               <div v-if="activeTab.fileType === 'topo' && activeTab.imageData" class="px-4 pb-4 border-t border-gray-200 pt-4">
                 <h3 class="text-sm font-medium text-gray-700 mb-3">影像處理</h3>
                 
@@ -264,11 +272,10 @@
           </div>
         </div>
       </div>
-    </div>
   </template>
   
   <script lang="ts">
-  import { defineComponent, ref, computed, watch, onMounted } from 'vue';
+  import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
   import { useSpmDataStore } from '../stores/spmDataStore';
   import type { FileInfo } from '../stores/spmDataStore';
   
@@ -479,6 +486,59 @@
           return {};
         }
       });
+
+
+      // 控制面板寬度相關
+      const controlPanelWidth = ref(260); // 預設寬度
+      const controlPanelRef = ref<HTMLElement | null>(null);
+      const isResizing = ref(false);
+      const startX = ref(0);
+      const startWidth = ref(0);
+      
+      // 開始調整寬度
+      const startResizing = (e: MouseEvent) => {
+        e.preventDefault();
+        isResizing.value = true;
+        startX.value = e.clientX;
+        startWidth.value = controlPanelWidth.value;
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        
+        // 添加調整時的樣式
+        if (controlPanelRef.value) {
+          controlPanelRef.value.classList.add('resizing');
+        }
+      };
+      
+      // 滑鼠移動時調整寬度
+      const onMouseMove = (e: MouseEvent) => {
+        if (!isResizing.value) return;
+        
+        const dx = e.clientX - startX.value;
+        const newWidth = startWidth.value + dx;
+        
+        // 限制最小和最大寬度
+        controlPanelWidth.value = Math.max(200, Math.min(500, newWidth));
+      };
+      
+      // 滑鼠放開時停止調整
+      const onMouseUp = () => {
+        isResizing.value = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        
+        // 移除調整時的樣式
+        if (controlPanelRef.value) {
+          controlPanelRef.value.classList.remove('resizing');
+        }
+      };
+      
+      // 組件卸載時清理事件監聽器
+      onBeforeUnmount(() => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      });
       
       // 當選擇的檔案類型改變時，重設選中的檔案
       watch(selectedFileType, () => {
@@ -521,6 +581,9 @@
         availableFiles,
         parameters,
         displayParameters,
+        controlPanelWidth,
+        controlPanelRef,
+        startResizing,
         switchTab,
         closeTab,
         loadSelectedFile,
@@ -531,6 +594,33 @@
   </script>
 
 <style scoped>
+/* 可調整寬度的控制面板樣式 */
+.resizable-panel {
+  position: relative;
+  transition: width 0.1s ease;
+}
+
+.resizable-panel.resizing {
+  transition: none;
+  user-select: none;
+}
+
+/* 調整寬度的把手 */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.resize-handle:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 檔案資訊樣式 */
 .info-row {
   white-space: nowrap;
   display: flex;
