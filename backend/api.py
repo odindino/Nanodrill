@@ -144,34 +144,165 @@ class NanodrillAPI:
             logger.error(f"獲取 TXT 檔案內容時出錯: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def get_int_file_preview(self, file_path):
-        """獲取與 txt 檔案相關聯的 INT 檔案預覽圖"""
+    def get_int_file_preview(self, txt_file_path):
+        """為預覽獲取與 txt 檔案相關聯的 TopoFwd.int 檔案圖像"""
         try:
-            # 檢查檔案是否存在
-            logger.info(f"嘗試預覽檔案: {file_path}")
-            if not os.path.exists(file_path):
-                logger.error(f"檔案不存在: {file_path}")
-                return {"success": False, "error": f"檔案不存在: {file_path}"}
+            # 檢查 txt 檔案是否存在
+            logger.info(f"[預覽] 嘗試預覽檔案: {txt_file_path}")
+            if not os.path.exists(txt_file_path):
+                logger.error(f"檔案不存在: {txt_file_path}")
+                return {"success": False, "error": f"檔案不存在: {txt_file_path}"}
             
             # 檢查檔案副檔名
-            _, ext = os.path.splitext(file_path)
+            _, ext = os.path.splitext(txt_file_path)
             logger.info(f"檔案副檔名: {ext}")
             
-            if ext.lower() != '.int':
-                logger.error(f"檔案類型不支援: {ext}")
-                return {"success": False, "error": f"檔案類型必須是 .int，而不是 {ext}"}
+            if ext.lower() != '.txt':
+                return {"success": False, "error": f"檔案類型必須是 .txt 而不是 {ext}"}
             
             # 獲取 txt 檔案的內容和參數
-            logger.info(f"開始解析 INT 檔案: {file_path}")
-            
-            # 使用 AnalysisService 來處理 .int 檔案分析
-            return AnalysisService.analyze_int_file(file_path)
-            
+            try:
+                with open(txt_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    
+                # 解析參數
+                parameters = self._parse_txt_parameters(content)
+                
+                # 從檔案描述中尋找 TopoFwd.int 檔案
+                topo_file = None
+                directory = os.path.dirname(txt_file_path)
+                
+                if "FileDescriptions" in parameters:
+                    for desc in parameters["FileDescriptions"]:
+                        if "FileName" in desc and "TopoFwd" in desc["FileName"] and desc["FileName"].lower().endswith(".int"):
+                            topo_file_name = desc["FileName"]
+                            topo_file_path = os.path.join(directory, topo_file_name)
+                            
+                            if os.path.exists(topo_file_path):
+                                logger.info(f"找到形貌圖檔案: {topo_file_path}")
+                                topo_file = {
+                                    "path": topo_file_path,
+                                    "scale": desc.get("Scale", "1.0"),
+                                    "physUnit": desc.get("PhysUnit", "nm")
+                                }
+                                break
+                
+                if not topo_file:
+                    logger.error(f"找不到相關的 TopoFwd.int 檔案，txt 檔案: {txt_file_path}")
+                    return {"success": False, "error": "找不到相關的 TopoFwd.int 檔案"}
+                
+                # 使用 AnalysisService 來生成預覽圖
+                file_info = {
+                    "scale": topo_file.get("scale", None),
+                    "physUnit": topo_file.get("physUnit", "nm"),
+                    "parameters": parameters
+                }
+                
+                logger.info(f"開始生成預覽圖，scale: {file_info['scale']}, unit: {file_info['physUnit']}")
+                
+                # 調用 AnalysisService 處理 INT 檔案
+                preview_result = AnalysisService.analyze_int_file(topo_file["path"], file_info)
+                
+                return preview_result
+                
+            except Exception as e:
+                logger.error(f"解析 TXT 檔案時出錯: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return {"success": False, "error": f"解析 TXT 檔案時出錯: {str(e)}"}
+                
         except Exception as e:
             logger.error(f"獲取 INT 預覽圖時出錯: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             return {"success": False, "error": f"獲取預覽圖時發生錯誤: {str(e)}"}
+
+    def analyze_int_file_api(self, int_file_path, txt_file_path=None):
+        """分析指定的 INT 檔案，可選提供相關的 TXT 檔案路徑獲取參數"""
+        try:
+            # 檢查 INT 檔案是否存在
+            logger.info(f"[分析] 嘗試分析檔案: {int_file_path}")
+            if not os.path.exists(int_file_path):
+                logger.error(f"檔案不存在: {int_file_path}")
+                return {"success": False, "error": f"檔案不存在: {int_file_path}"}
+            
+            # 檢查檔案副檔名
+            _, ext = os.path.splitext(int_file_path)
+            logger.info(f"檔案副檔名: {ext}")
+            
+            if ext.lower() != '.int':
+                return {"success": False, "error": f"檔案類型必須是 .int 而不是 {ext}"}
+            
+            # 如果提供了 txt 檔案路徑，則從中獲取參數
+            parameters = {}
+            if txt_file_path and os.path.exists(txt_file_path):
+                try:
+                    with open(txt_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    parameters = self._parse_txt_parameters(content)
+                    logger.info(f"從 TXT 檔案 {txt_file_path} 獲取參數")
+                except Exception as e:
+                    logger.warning(f"無法解析 TXT 檔案 {txt_file_path}: {str(e)}")
+            else:
+                # 尋找可能的 txt 檔案
+                directory = os.path.dirname(int_file_path)
+                int_filename = os.path.basename(int_file_path)
+                
+                # 嘗試從檔名獲取 txt 檔案名
+                base_name = int_filename.split('_')[0]
+                for filename in os.listdir(directory):
+                    if filename.endswith('.txt') and filename.startswith(base_name):
+                        txt_file_path = os.path.join(directory, filename)
+                        try:
+                            with open(txt_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read()
+                            parameters = self._parse_txt_parameters(content)
+                            logger.info(f"自動找到並從 TXT 檔案 {txt_file_path} 獲取參數")
+                            break
+                        except Exception as e:
+                            logger.warning(f"無法解析 TXT 檔案 {txt_file_path}: {str(e)}")
+            
+            # 從檔案描述中尋找本 int 檔的比例尺
+            scale = None
+            phys_unit = "nm"
+            
+            if "FileDescriptions" in parameters:
+                int_filename = os.path.basename(int_file_path)
+                for desc in parameters["FileDescriptions"]:
+                    if "FileName" in desc and desc["FileName"] == int_filename:
+                        if "Scale" in desc:
+                            try:
+                                scale = float(desc["Scale"])
+                                logger.info(f"從 TXT 檔案找到比例尺: {scale}")
+                            except (ValueError, TypeError):
+                                logger.warning(f"無法轉換比例尺: {desc['Scale']}")
+                        
+                        if "PhysUnit" in desc:
+                            phys_unit = desc["PhysUnit"]
+                            logger.info(f"從 TXT 檔案找到物理單位: {phys_unit}")
+                        
+                        break
+            
+            # 獲取像素數量
+            x_pixel = int(parameters.get("xPixel", 512))
+            y_pixel = int(parameters.get("yPixel", 512))
+            
+            # 準備檔案資訊
+            file_info = {
+                "scale": scale,
+                "physUnit": phys_unit,
+                "parameters": parameters
+            }
+            
+            # 使用 AnalysisService 來處理 .int 檔案分析
+            logger.info(f"開始分析 INT 檔案，scale: {scale}, unit: {phys_unit}")
+            return AnalysisService.analyze_int_file(int_file_path, file_info)
+            
+        except Exception as e:
+            logger.error(f"分析 INT 檔案時出錯: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"success": False, "error": f"分析 INT 檔案時發生錯誤: {str(e)}"}
             
     def analyze_int_file(self, file_path, parent_file_info=None):
         """分析 .int 檔案"""

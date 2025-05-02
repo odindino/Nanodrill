@@ -688,7 +688,7 @@ export default defineComponent({
           }
           
           // 獲取預覽圖
-          console.log('正在獲取預覽圖:', file.path);
+          console.log('正在獲取預覽圖，TXT 檔案:', file.path);
           const imgResult = await window.pywebview.api.get_int_file_preview(file.path);
           
           if (imgResult.success && imgResult.image) {
@@ -698,7 +698,7 @@ export default defineComponent({
             previewUnit.value = imgResult.physUnit || 'nm';
           } else {
             console.warn('預覽圖獲取失敗:', imgResult.error);
-            // 即使圖像獲取失敗，我們仍然顯示 TXT 檔案內容，所以不設置 previewError
+            previewError.value = imgResult.error || '無法獲取預覽圖';
           }
         } else {
           console.error('TXT 檔案內容獲取失敗:', txtResult.error);

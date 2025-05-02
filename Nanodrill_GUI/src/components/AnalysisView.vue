@@ -327,15 +327,18 @@
         
         try {
             // 檢查檔案類型
-            const fileName = availableFiles.value.find(f => f.path === selectedFileId.value)?.name || '';
+            const selectedFile = availableFiles.value.find(f => f.path === selectedFileId.value);
+            const fileName = selectedFile?.name || '';
             
             // 輸出路徑信息以供調試
             console.log('嘗試載入檔案:', selectedFileId.value);
             console.log('檔案名稱:', fileName);
+            console.log('標籤頁 TXT 檔案:', activeTab.value.fileId);
             
             if (fileName.toLowerCase().endsWith('.int')) {
-            // 處理 .int 檔案 - 調用後端 API 獲取預覽圖像
-            const result = await window.pywebview.api.get_int_file_preview(selectedFileId.value);
+              // 處理 .int 檔案 - 調用後端 API 處理 INT 檔案分析
+              // 傳遞 INT 檔案路徑和原始 TXT 檔案路徑
+              const result = await window.pywebview.api.analyze_int_file_api(selectedFileId.value, activeTab.value.fileId);
             
             if (result.success) {
                 // 更新標籤頁的數據
@@ -352,7 +355,7 @@
             }
             } else {
             // 處理其他類型檔案 (未實現)
-            loadError.value = '暫不支援此檔案類型';
+            loadError.value = '檔案類型必須是 .int 而不是 ' + fileName.split('.').pop();
             }
         } catch (error) {
             console.error('載入檔案錯誤:', error);
