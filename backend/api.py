@@ -2,8 +2,11 @@ import os
 import re
 import logging
 import webview
+import numpy as np
 from datetime import datetime
 from core.analysis_service import AnalysisService
+from core.analysis.int_analysis import IntAnalysis
+from core.analysis.profile_analysis import ProfileAnalysis
 
 # 設置日誌
 logging.basicConfig(level=logging.DEBUG, 
@@ -389,3 +392,198 @@ class NanodrillAPI:
         parameters['FileDescriptions'] = file_descriptions
         
         return parameters
+    
+    def apply_flatten(self, image_data, method="mean", degree=1):
+        """應用平面化處理"""
+        try:
+            # 將前端發送的數據轉換為numpy數組
+            image_data_array = np.array(image_data)
+            
+            # 根據方法選擇不同的平面化處理
+            if method == "mean":
+                result = IntAnalysis.linewise_flatten_mean(image_data_array)
+            elif method == "polyfit":
+                result = IntAnalysis.linewise_flatten_polyfit(image_data_array, deg=degree)
+            elif method == "plane":
+                result = IntAnalysis.plane_flatten(image_data_array)
+            else:
+                return {"success": False, "error": f"未知的平面化方法: {method}"}
+            
+            # 將處理結果轉換回列表格式，以便前端使用
+            result_list = result.tolist()
+            
+            # 計算基本統計數據
+            stats = {
+                "min": float(np.min(result)),
+                "max": float(np.max(result)),
+                "mean": float(np.mean(result)),
+                "median": float(np.median(result)),
+                "std": float(np.std(result)),
+                "rms": float(np.sqrt(np.mean(np.square(result - np.mean(result)))))
+            }
+            
+            return {
+                "success": True,
+                "processed_data": result_list,
+                "statistics": stats
+            }
+        except Exception as e:
+            logger.error(f"平面化處理失敗: {str(e)}")
+            return {"success": False, "error": str(e)}
+            
+    def tilt_image(self, image_data, direction, fine_tune=False):
+        """應用影像傾斜調整"""
+        try:
+            # 將前端發送的數據轉換為numpy數組
+            image_data_array = np.array(image_data)
+            
+            # 應用傾斜調整
+            result = IntAnalysis.tilt_image(image_data_array, direction, fine_tune=fine_tune)
+            
+            # 將處理結果轉換回列表格式
+            result_list = result.tolist()
+            
+            # 計算基本統計數據
+            stats = {
+                "min": float(np.min(result)),
+                "max": float(np.max(result)),
+                "mean": float(np.mean(result)),
+                "median": float(np.median(result)),
+                "std": float(np.std(result)),
+                "rms": float(np.sqrt(np.mean(np.square(result - np.mean(result)))))
+            }
+            
+            return {
+                "success": True,
+                "processed_data": result_list,
+                "statistics": stats
+            }
+        except Exception as e:
+            logger.error(f"傾斜調整失敗: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+    def get_line_profile(self, image_data, start_point, end_point, physical_scale=1.0, shift_zero=False):
+        """獲取線性剖面數據和圖像"""
+        try:
+            # 將前端發送的數據轉換為numpy數組
+            image_data_array = np.array(image_data)
+            
+            # 獲取剖面數據
+            profile_data = IntAnalysis.get_line_profile(
+                image_data_array, 
+                start_point, 
+                end_point, 
+                physical_scale
+            )
+            
+            # 生成剖面圖像
+            profile_image = IntAnalysis.generate_profile_image(
+                profile_data, 
+                shift_zero=shift_zero
+            )
+            
+            # 計算粗糙度參數
+            roughness = ProfileAnalysis.calculate_roughness(profile_data['height'])
+            
+            return {
+                "success": True,
+                "profile_data": profile_data,
+                "profile_image": profile_image,
+                "roughness": roughness
+            }
+        except Exception as e:
+            logger.error(f"獲取剖面失敗: {str(e)}")
+            return {"success": False, "error": str(e)}
+        
+    def analyze_int_file_api(self, int_file_path, txt_file_path=None):
+        """分析指定的 INT 檔案，可選提供相關的 TXT 檔案路徑獲取參數"""
+        try:
+            # 檢查 INT 檔案是否存在
+            logger.info(f"[分析] 嘗試分析檔案: {int_file_path}")
+            if not os.path.exists(int_file_path):
+                logger.error(f"檔案不存在: {int_file_path}")
+                return {"success": False, "error": f"檔案不存在: {int_file_path}"}
+            
+            # 檢查檔案副檔名
+            _, ext = os.path.splitext(int_file_path)
+            logger.info(f"檔案副檔名: {ext}")
+            
+            if ext.lower() != '.int':
+                return {"success": False, "error": f"檔案類型必須是 .int 而不是 {ext}"}
+            
+            # 如果提供了 txt 檔案路徑，則從中獲取參數
+            parameters = {}
+            if txt_file_path and os.path.exists(txt_file_path):
+                try:
+                    with open(txt_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    parameters = self._parse_txt_parameters(content)
+                    logger.info(f"從 TXT 檔案 {txt_file_path} 獲取參數")
+                except Exception as e:
+                    logger.warning(f"無法解析 TXT 檔案 {txt_file_path}: {str(e)}")
+            
+            # 從檔案描述中尋找本 int 檔的比例尺
+            scale = None
+            phys_unit = "nm"
+            
+            if "FileDescriptions" in parameters:
+                int_filename = os.path.basename(int_file_path)
+                for desc in parameters["FileDescriptions"]:
+                    if "FileName" in desc and desc["FileName"] == int_filename:
+                        if "Scale" in desc:
+                            try:
+                                scale = float(desc["Scale"])
+                                logger.info(f"從 TXT 檔案找到比例尺: {scale}")
+                            except (ValueError, TypeError):
+                                logger.warning(f"無法轉換比例尺: {desc['Scale']}")
+                        
+                        if "PhysUnit" in desc:
+                            phys_unit = desc["PhysUnit"]
+                            logger.info(f"從 TXT 檔案找到物理單位: {phys_unit}")
+                        
+                        break
+            
+            # 獲取像素數量
+            x_pixel = int(parameters.get("xPixel", 512))
+            y_pixel = int(parameters.get("yPixel", 512))
+            
+            # 準備檔案資訊
+            file_info = {
+                "scale": scale,
+                "physUnit": phys_unit,
+                "parameters": parameters
+            }
+            
+            # 使用 AnalysisService 來處理 .int 檔案分析
+            logger.info(f"開始分析 INT 檔案，scale: {scale}, unit: {phys_unit}")
+            return self.analyze_int_file(int_file_path, file_info)
+            
+        except Exception as e:
+            logger.error(f"分析 INT 檔案時出錯: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"success": False, "error": f"分析 INT 檔案時發生錯誤: {str(e)}"}
+        
+    def update_profile(self, profile_data, shift_zero=False, auto_scale=True, show_peaks=False, peak_sensitivity=1.0):
+        """更新剖面圖設置"""
+        try:
+            from core.analysis.profile_analysis import ProfileAnalysis
+            
+            # 生成剖面圖像
+            profile_image = ProfileAnalysis.generate_profile_image(
+                profile_data,
+                shift_zero=shift_zero,
+                auto_scale=auto_scale,
+                show_peaks=show_peaks,
+                peak_sensitivity=peak_sensitivity
+            )
+            
+            return {
+                "success": True,
+                "profile_image": profile_image
+            }
+        except Exception as e:
+            logger.error(f"更新剖面圖失敗: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"success": False, "error": str(e)}
