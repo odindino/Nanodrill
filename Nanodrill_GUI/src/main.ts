@@ -4,6 +4,10 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import './styles.css';  // 確保路徑正確
 
+// 註冊分析組件
+import ImageViewer from './components/analysis/ImageViewer.vue';
+import ProfileViewer from './components/analysis/ProfileViewer.vue';
+
 // 創建 Pinia 實例
 const pinia = createPinia();
 
@@ -22,3 +26,6 @@ app.config.errorHandler = (err, instance, info) => {
 
 // 掛載應用到 DOM
 app.mount('#app');
+
+app.component('ImageViewer', ImageViewer);
+app.component('ProfileViewer', ProfileViewer);
