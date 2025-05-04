@@ -27,5 +27,6 @@ app.config.errorHandler = (err, instance, info) => {
 // 掛載應用到 DOM
 app.mount('#app');
 
+// 註冊全局組件
 app.component('ImageViewer', ImageViewer);
 app.component('ProfileViewer', ProfileViewer);

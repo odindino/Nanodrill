@@ -45,15 +45,15 @@
         </div>
       </div>
       
-      <!-- 實際圖像 -->
+      <!-- 實際圖像 - 使用Plotly互動式圖表 -->
       <div v-else class="h-full w-full relative">
-        <img v-if="imageData" 
-             :src="'data:image/png;base64,' + imageData" 
-             :alt="title" 
-             class="h-full w-full object-contain"
+        <!-- Plotly 圖表容器 -->
+        <div v-if="imageRawData" 
+             ref="plotlyContainer" 
+             class="w-full h-full"
              @mousedown="handleMouseDown"
              @mousemove="handleMouseMove"
-             @mouseup="handleMouseUp" />
+             @mouseup="handleMouseUp"></div>
         
         <!-- 線性剖面繪製線 -->
         <svg v-if="lineProfileEnabled" class="absolute top-0 left-0 w-full h-full pointer-events-none">
@@ -81,8 +81,8 @@
                   fill="#ff6b6b" />
         </svg>
         
-        <!-- 無圖像提示 -->
-        <div v-if="!imageData" class="absolute inset-0 flex items-center justify-center bg-gray-50">
+        <!-- 無圖像數據提示 -->
+        <div v-if="!imageRawData" class="absolute inset-0 flex items-center justify-center bg-gray-50">
           <div class="text-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -114,8 +114,9 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed } from 'vue';
+import { defineComponent, ref, computed, onMounted, watch } from 'vue';
 import type { PropType } from 'vue';
+import Plotly from 'plotly.js-dist-min';
 
 // 定義統計信息介面
 interface ImageStats {
@@ -147,6 +148,10 @@ export default defineComponent({
     imageData: {
       type: String,
       default: ''
+    },
+    imageRawData: {
+      type: Array as PropType<number[][]>,
+      default: null
     },
     title: {
       type: String,
@@ -205,6 +210,8 @@ export default defineComponent({
   setup(props, { emit }) {
     // 圖像容器引用
     const imageContainer = ref<HTMLElement | null>(null);
+    const plotlyContainer = ref<HTMLElement | null>(null);
+    let plotlyInstance: any = null;
     
     // 線性剖面相關狀態
     const lineProfileEnabled = ref(false);
@@ -277,47 +284,20 @@ export default defineComponent({
     };
     
     // 獲取物理座標
-    const getPhysicalCoordinates = (point: Point, imgElement: HTMLImageElement) => {
-      const rect = imgElement.getBoundingClientRect();
-      const imgNaturalWidth = imgElement.naturalWidth;
-      const imgNaturalHeight = imgElement.naturalHeight;
+    const getPhysicalCoordinates = (point: Point, plotlyRect: DOMRect) => {
+      const { width, height, xRange, yRange } = props.dimensions;
       
-      // 計算圖像在容器中的實際尺寸和位置
-      const imgRatio = imgNaturalWidth / imgNaturalHeight;
-      const containerRatio = rect.width / rect.height;
-      
-      let imgDisplayWidth: number, imgDisplayHeight: number, offsetX: number, offsetY: number;
-      
-      if (imgRatio > containerRatio) {
-        // 圖像寬度適應容器
-        imgDisplayWidth = rect.width;
-        imgDisplayHeight = imgDisplayWidth / imgRatio;
-        offsetX = 0;
-        offsetY = (rect.height - imgDisplayHeight) / 2;
-      } else {
-        // 圖像高度適應容器
-        imgDisplayHeight = rect.height;
-        imgDisplayWidth = imgDisplayHeight * imgRatio;
-        offsetX = (rect.width - imgDisplayWidth) / 2;
-        offsetY = 0;
-      }
-      
-      // 計算點在圖像上的相對位置（考慮縮放和偏移）
-      const relX = (point.x - offsetX) / imgDisplayWidth;
-      const relY = (point.y - offsetY) / imgDisplayHeight;
-      
-      // 如果點在圖像外，返回 null
-      if (relX < 0 || relX > 1 || relY < 0 || relY > 1) {
-        return null;
-      }
+      // 計算點在圖像上的相對位置
+      const relX = point.x / plotlyRect.width;
+      const relY = 1 - (point.y / plotlyRect.height); // Y軸翻轉，原點在左下角
       
       // 計算物理座標
-      const physX = relX * props.dimensions.xRange;
-      const physY = (1 - relY) * props.dimensions.yRange; // 反轉 Y 座標
+      const physX = relX * xRange;
+      const physY = relY * yRange;
       
       // 計算像素座標
-      const pixelX = Math.floor(relX * props.dimensions.width);
-      const pixelY = Math.floor(relY * props.dimensions.height);
+      const pixelX = Math.floor(relX * width);
+      const pixelY = Math.floor((1 - relY) * height); // 翻轉回來，原點在左上角
       
       return {
         physicalX: physX,
@@ -329,15 +309,12 @@ export default defineComponent({
     
     // 發送剖面數據
     const sendProfileData = () => {
-      if (!lineStart.value || !lineEnd.value) return;
+      if (!lineStart.value || !lineEnd.value || !plotlyContainer.value) return;
       
-      const imgElement = imageContainer.value?.querySelector('img') as HTMLImageElement;
-      if (!imgElement) return;
+      const rect = plotlyContainer.value.getBoundingClientRect();
       
-      const startCoord = getPhysicalCoordinates(lineStart.value, imgElement);
-      const endCoord = getPhysicalCoordinates(lineEnd.value, imgElement);
-      
-      if (!startCoord || !endCoord) return;
+      const startCoord = getPhysicalCoordinates(lineStart.value, rect);
+      const endCoord = getPhysicalCoordinates(lineEnd.value, rect);
       
       // 發送事件
       emit('line-profile', {
@@ -354,8 +331,130 @@ export default defineComponent({
       lineEnd.value = null;
     };
     
+    // 創建 Plotly 圖表
+    const createPlotlyChart = () => {
+      if (!props.imageRawData || !plotlyContainer.value) return;
+      
+      const { width, height, xRange, yRange } = props.dimensions;
+      
+      // 創建 x 和 y 座標數組
+      const x = Array.from({ length: width }, (_, i) => (i * xRange) / width);
+      const y = Array.from({ length: height }, (_, i) => (i * yRange) / height);
+      
+      // 準備數據
+      const data = [{
+        z: props.imageRawData,
+        x: x,
+        y: y,
+        type: 'heatmap',
+        colorscale: props.colormap,
+        showscale: true,
+        zauto: true
+      }];
+      
+      // 準備布局
+      const layout = {
+        title: '',
+        margin: { l: 50, r: 50, b: 50, t: 30 },
+        xaxis: {
+          title: `X (${props.physUnit})`,
+          constrain: 'domain'
+        },
+        yaxis: {
+          title: `Y (${props.physUnit})`,
+          scaleanchor: 'x',
+          constrain: 'domain'
+        },
+        coloraxis: {
+          colorbar: {
+            title: `Height (${props.physUnit})`
+          }
+        },
+        autosize: true
+      };
+      
+      // 設置配置
+      const config = {
+        responsive: true,
+        displayModeBar: true,
+        modeBarButtonsToRemove: [
+          'toImage', 'sendDataToCloud', 'editInChartStudio', 
+          'toggleHover', 'toggleSpikelines', 'resetScale2d'
+        ],
+        displaylogo: false
+      };
+      
+      // 創建圖表
+      Plotly.newPlot(plotlyContainer.value, data, layout, config);
+      
+      // 保存圖表實例用於更新
+      plotlyInstance = plotlyContainer.value;
+      console.log('Creating Plotly chart with data:', props.imageRawData);
+      console.log('Container element:', plotlyContainer.value);
+    };
+    
+    // 更新 Plotly 圖表
+    const updatePlotlyChart = () => {
+      if (!props.imageRawData || !plotlyInstance) return;
+      
+      // 更新數據和顏色映射
+      Plotly.update(plotlyInstance, {
+        z: [props.imageRawData],
+        colorscale: [props.colormap]
+      });
+    };
+    
+    // 監視 imageRawData 變化
+    watch(() => props.imageRawData, (newData) => {
+      if (newData) {
+        // 有數據時創建或更新圖表
+        if (!plotlyInstance) {
+          // 延遲一幀以確保 DOM 已更新
+          setTimeout(createPlotlyChart, 0);
+        } else {
+          updatePlotlyChart();
+        }
+      }
+    }, { immediate: true });
+    
+    // 監視 colormap 變化
+    watch(() => props.colormap, () => {
+      updatePlotlyChart();
+    });
+    
+    // 監視 zScale 變化
+    watch(() => props.zScale, () => {
+      // 這裡我們需要通過修改 coloraxis 來調整顯示範圍
+      if (plotlyInstance) {
+        const zMin = props.stats ? props.stats.min : null;
+        const zMax = props.stats ? props.stats.max : null;
+        
+        if (zMin !== null && zMax !== null) {
+          const zRange = zMax - zMin;
+          const mid = (zMax + zMin) / 2;
+          
+          // 根據 zScale 調整顯示範圍
+          const newZMin = mid - (zRange / 2) / props.zScale;
+          const newZMax = mid + (zRange / 2) / props.zScale;
+          
+          Plotly.relayout(plotlyInstance, {
+            'coloraxis.cmin': newZMin,
+            'coloraxis.cmax': newZMax
+          });
+        }
+      }
+    });
+    
+    // 組件掛載時
+    onMounted(() => {
+      if (props.imageRawData) {
+        createPlotlyChart();
+      }
+    });
+    
     return {
       imageContainer,
+      plotlyContainer,
       lineProfileEnabled,
       isDrawingLine,
       lineStart,

@@ -18,7 +18,7 @@ class AnalysisService:
     
     @staticmethod
     def analyze_int_file(file_path, file_info=None):
-        """分析 .int 檔案並回傳圖像數據"""
+        """分析 .int 檔案並回傳圖像數據和原始數據"""
         try:
             if not os.path.exists(file_path):
                 logger.error(f"檔案不存在: {file_path}")
@@ -162,7 +162,7 @@ class AnalysisService:
             # 檔案名稱 (只取基本名稱)
             base_filename = os.path.basename(file_path)
             
-            # 生成圖像
+            # 生成預覽圖像 (仍保留以相容性)
             logger.info(f"開始生成預覽圖")
             fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
             
@@ -206,9 +206,13 @@ class AnalysisService:
                 "rms": float(np.sqrt(np.mean(np.square(image_data))))
             }
             
+            # 將原始資料轉換為列表，以便JSON序列化
+            raw_data = image_data.tolist()
+            
             return {
                 "success": True,
-                "image": img_base64,
+                "image": img_base64,  # 保留靜態圖像以相容性
+                "rawData": raw_data,  # 添加原始數據
                 "statistics": stats,
                 "dimensions": {
                     "width": x_pixels,

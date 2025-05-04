@@ -637,13 +637,133 @@ export default defineComponent({
     };
     
     // 應用平面化
-    const applyFlatten = async (method: string) => {
-      // 實現平面化處理的邏輯
+    const applyFlatten = async (method) => {
+      if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
+      
+      try {
+        // 找到當前活動的視圖
+        const group = activeTab.value.viewerGroups.find(g => g.id === activeGroupId);
+        if (!group) return;
+        
+        const viewerIndex = group.viewers.findIndex(v => 
+          v.props && v.props.isActive && v.component === 'ImageViewer'
+        );
+        
+        if (viewerIndex === -1) return;
+        
+        // 獲取當前視圖的原始數據
+        const imageData = group.viewers[viewerIndex].props.imageRawData;
+        if (!imageData) {
+          tabLoadError.value = "沒有可用的圖像數據";
+          return;
+        }
+        
+        isTabLoading.value = true;
+        
+        // 調用API進行平面化處理
+        const response = await window.pywebview.api.apply_flatten(
+          imageData, 
+          method, 
+          method === 'polyfit' ? 2 : 1  // 對於多項式方法，使用2階
+        );
+        
+        if (response.success) {
+          // 更新視圖數據
+          const updatedViewers = [...group.viewers];
+          updatedViewers[viewerIndex] = {
+            ...updatedViewers[viewerIndex],
+            props: {
+              ...updatedViewers[viewerIndex].props,
+              imageRawData: response.processed_data,
+              statistics: response.statistics
+            }
+          };
+          
+          // 更新視圖組
+          const updatedGroups = [...activeTab.value.viewerGroups];
+          updatedGroups[updatedGroups.indexOf(group)] = {
+            ...group,
+            viewers: updatedViewers
+          };
+          
+          // 更新標籤頁
+          spmDataStore.updateAnalysisTabData(activeTabId.value, {
+            viewerGroups: updatedGroups
+          });
+        } else {
+          tabLoadError.value = response.error || "平面化處理失敗";
+        }
+      } catch (error) {
+        console.error('平面化處理錯誤:', error);
+        tabLoadError.value = `平面化處理時發生錯誤: ${error}`;
+      } finally {
+        isTabLoading.value = false;
+      }
     };
     
     // 調整傾斜
-    const adjustTilt = async (direction: string) => {
-      // 實現傾斜調整的邏輯
+    const adjustTilt = async (direction) => {
+      if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
+      
+      try {
+        // 找到當前活動的視圖
+        const group = activeTab.value.viewerGroups.find(g => g.id === activeGroupId);
+        if (!group) return;
+        
+        const viewerIndex = group.viewers.findIndex(v => 
+          v.props && v.props.isActive && v.component === 'ImageViewer'
+        );
+        
+        if (viewerIndex === -1) return;
+        
+        // 獲取當前視圖的原始數據
+        const imageData = group.viewers[viewerIndex].props.imageRawData;
+        if (!imageData) {
+          tabLoadError.value = "沒有可用的圖像數據";
+          return;
+        }
+        
+        isTabLoading.value = true;
+        
+        // 調用API進行傾斜調整
+        const response = await window.pywebview.api.tilt_image(
+          imageData, 
+          direction,
+          fineTuneTilt.value
+        );
+        
+        if (response.success) {
+          // 更新視圖數據
+          const updatedViewers = [...group.viewers];
+          updatedViewers[viewerIndex] = {
+            ...updatedViewers[viewerIndex],
+            props: {
+              ...updatedViewers[viewerIndex].props,
+              imageRawData: response.processed_data,
+              statistics: response.statistics
+            }
+          };
+          
+          // 更新視圖組
+          const updatedGroups = [...activeTab.value.viewerGroups];
+          updatedGroups[updatedGroups.indexOf(group)] = {
+            ...group,
+            viewers: updatedViewers
+          };
+          
+          // 更新標籤頁
+          spmDataStore.updateAnalysisTabData(activeTabId.value, {
+            viewerGroups: updatedGroups
+          });
+        } else {
+          tabLoadError.value = response.error || "傾斜調整失敗";
+        }
+      } catch (error) {
+        console.error('傾斜調整錯誤:', error);
+        tabLoadError.value = `傾斜調整時發生錯誤: ${error}`;
+      } finally {
+        isTabLoading.value = false;
+      }
     };
     
     // 監視標籤頁變化

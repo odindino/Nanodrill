@@ -5,6 +5,12 @@ from scipy import ndimage, fftpack
 import matplotlib.pyplot as plt
 import io
 import base64
+import plotly.graph_objects as go
+from plotly.io import to_image
+import plotly.io as pio
+
+# 設置預設輸出格式為網頁
+pio.templates.default = "plotly_white"
 
 logger = logging.getLogger(__name__)
 
@@ -233,34 +239,184 @@ class IntAnalysis:
             if shift_zero and len(z) > 0:
                 z = z - np.min(z)
             
-            # 創建圖像
-            fig, ax = plt.subplots(figsize=(8, 4), dpi=100)
-            ax.plot(x, z, '-', linewidth=1.5)
+            # 使用Plotly創建圖像
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=x,
+                y=z,
+                mode='lines',
+                name='Height Profile',
+                line=dict(color='royalblue', width=2)
+            ))
             
-            # 設置標題和標籤
-            ax.set_title(title)
-            ax.set_xlabel('Distance (nm)')
-            ax.set_ylabel('Height (nm)')
-            ax.grid(True, linestyle='--', alpha=0.7)
+            # 設置佈局
+            fig.update_layout(
+                title=title,
+                xaxis_title=f'Distance (nm)',
+                yaxis_title=f'Height (nm)',
+                autosize=True,
+                width=800,
+                height=400,
+                margin=dict(l=50, r=50, t=50, b=50),
+                showlegend=False,
+                plot_bgcolor='white'
+            )
             
-            # 添加一些統計信息
+            # 添加網格線
+            fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
+            fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
+            
+            # 添加統計信息
             if 'stats' in profile_data and profile_data['stats']:
                 stats = profile_data['stats']
-                stat_text = f"Range: {stats['range']:.2f} nm, RMS: {stats['rms']:.2f} nm"
-                ax.annotate(stat_text, xy=(0.02, 0.02), xycoords='axes fraction', 
-                           fontsize=8, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+                annotation_text = f"Range: {stats['range']:.2f} nm, RMS: {stats['rms']:.2f} nm"
+                fig.add_annotation(
+                    x=0.02,
+                    y=0.02,
+                    xref="paper",
+                    yref="paper",
+                    text=annotation_text,
+                    showarrow=False,
+                    align="left",
+                    bgcolor="rgba(255, 255, 255, 0.8)",
+                    bordercolor="gray",
+                    borderwidth=1,
+                    borderpad=4,
+                    font=dict(size=10)
+                )
             
-            # 轉換為PNG圖像
-            buf = io.BytesIO()
-            fig.tight_layout()
-            fig.savefig(buf, format='png', dpi=100)
-            buf.seek(0)
-            img_data = buf.read()
-            img_base64 = base64.b64encode(img_data).decode('utf-8')
-            buf.close()
-            plt.close(fig)
+            # 將圖像轉換為PNG並進行base64編碼
+            img_bytes = to_image(fig, format='png', width=800, height=400)
+            img_base64 = base64.b64encode(img_bytes).decode('utf-8')
             
             return img_base64
         except Exception as e:
             logger.error(f"生成剖面圖像失敗: {str(e)}")
             return ""
+            
+    @staticmethod
+    def generate_topo_plot(image_data, dimensions=None, title="Topography", colormap="Viridis", phys_unit="nm"):
+        """
+        使用Plotly生成SPM形貌圖
+        
+        Args:
+            image_data: 2D numpy數組，形貌數據
+            dimensions: 掃描尺寸 (x_range, y_range) 或 None
+            title: 圖像標題
+            colormap: 顏色映射名稱
+            phys_unit: 物理單位
+            
+        Returns:
+            plotly.graph_objects.Figure對象
+        """
+        try:
+            # 獲取數據尺寸
+            y_size, x_size = image_data.shape
+            
+            # 如果提供了尺寸信息，創建對應的坐標軸
+            if dimensions and len(dimensions) == 2:
+                x_range, y_range = dimensions
+                x = np.linspace(0, x_range, x_size)
+                y = np.linspace(0, y_range, y_size)
+            else:
+                x = np.arange(x_size)
+                y = np.arange(y_size)
+            
+            # 創建heatmap圖
+            fig = go.Figure(data=go.Heatmap(
+                z=image_data,
+                x=x,
+                y=y,
+                colorscale=colormap,
+                colorbar=dict(
+                    title=f'Height ({phys_unit})',
+                    titleside='right',
+                    titlefont=dict(size=14)
+                )
+            ))
+            
+            # 設置佈局
+            fig.update_layout(
+                title=title,
+                xaxis_title=f'X ({phys_unit})',
+                yaxis_title=f'Y ({phys_unit})',
+                xaxis=dict(
+                    scaleanchor="y",
+                    constrain='domain'
+                ),
+                autosize=True,
+                width=700,
+                height=600,
+                margin=dict(l=65, r=50, t=90, b=65)
+            )
+            
+            return fig
+        except Exception as e:
+            logger.error(f"生成形貌圖失敗: {str(e)}")
+            raise
+            
+    @staticmethod
+    def generate_topo_image(image_data, dimensions=None, title="Topography", colormap="Viridis", phys_unit="nm"):
+        """
+        使用Plotly生成SPM形貌圖並轉換為base64圖像
+        
+        Args:
+            image_data: 2D numpy數組，形貌數據
+            dimensions: 掃描尺寸 (x_range, y_range) 或 None
+            title: 圖像標題
+            colormap: 顏色映射名稱
+            phys_unit: 物理單位
+            
+        Returns:
+            base64編碼的PNG圖像
+        """
+        try:
+            # 使用generate_topo_plot生成圖形
+            fig = IntAnalysis.generate_topo_plot(
+                image_data, dimensions, title, colormap, phys_unit
+            )
+            
+            # 轉換為PNG並進行base64編碼
+            img_bytes = to_image(fig, format='png', width=700, height=600, scale=1.5)
+            img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+            
+            return img_base64
+        except Exception as e:
+            logger.error(f"生成形貌圖圖像失敗: {str(e)}")
+            return ""
+            
+    @staticmethod
+    def get_topo_stats(image_data):
+        """
+        計算形貌數據的基本統計信息
+        
+        Args:
+            image_data: 2D numpy數組，形貌數據
+            
+        Returns:
+            dict: 包含統計數據的字典
+        """
+        try:
+            # 移除NaN值進行計算
+            valid_data = image_data[~np.isnan(image_data)]
+            
+            stats = {
+                "min": float(np.min(valid_data)),
+                "max": float(np.max(valid_data)),
+                "mean": float(np.mean(valid_data)),
+                "median": float(np.median(valid_data)),
+                "std": float(np.std(valid_data)),
+                "rms": float(np.sqrt(np.mean(np.square(valid_data - np.mean(valid_data)))))
+            }
+            
+            return stats
+        except Exception as e:
+            logger.error(f"計算統計數據失敗: {str(e)}")
+            return {
+                "min": 0.0,
+                "max": 0.0,
+                "mean": 0.0,
+                "median": 0.0,
+                "std": 0.0,
+                "rms": 0.0
+            }

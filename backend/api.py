@@ -394,7 +394,16 @@ class NanodrillAPI:
         return parameters
     
     def apply_flatten(self, image_data, method="mean", degree=1):
-        """應用平面化處理"""
+        """應用平面化處理
+        
+        Args:
+            image_data: 2D數組形式的圖像數據
+            method: 平面化方法 ("mean", "polyfit" 或 "plane")
+            degree: 使用 polyfit 方法時的多項式階數
+        
+        Returns:
+            包含處理後數據的字典
+        """
         try:
             # 將前端發送的數據轉換為numpy數組
             image_data_array = np.array(image_data)
@@ -429,10 +438,21 @@ class NanodrillAPI:
             }
         except Exception as e:
             logger.error(f"平面化處理失敗: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {"success": False, "error": str(e)}
-            
+        
     def tilt_image(self, image_data, direction, fine_tune=False):
-        """應用影像傾斜調整"""
+        """應用影像傾斜調整
+        
+        Args:
+            image_data: 2D數組形式的圖像數據
+            direction: 傾斜方向 ("up", "down", "left", "right")
+            fine_tune: 是否為微調模式
+        
+        Returns:
+            包含處理後數據的字典
+        """
         try:
             # 將前端發送的數據轉換為numpy數組
             image_data_array = np.array(image_data)
@@ -460,6 +480,8 @@ class NanodrillAPI:
             }
         except Exception as e:
             logger.error(f"傾斜調整失敗: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {"success": False, "error": str(e)}
 
     def get_line_profile(self, image_data, start_point, end_point, physical_scale=1.0, shift_zero=False):
