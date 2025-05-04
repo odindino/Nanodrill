@@ -295,7 +295,7 @@ class IntAnalysis:
             return ""
             
     @staticmethod
-    def generate_topo_plot(image_data, dimensions=None, title="Topography", colormap="Viridis", phys_unit="nm"):
+    def generate_topo_plot(image_data, dimensions=None, title="Topography", colormap="Oranges", phys_unit="nm"):
         """
         使用Plotly生成SPM形貌圖
         
@@ -356,7 +356,7 @@ class IntAnalysis:
             raise
             
     @staticmethod
-    def generate_topo_image(image_data, dimensions=None, title="Topography", colormap="Viridis", phys_unit="nm"):
+    def generate_topo_image(image_data, dimensions=None, title="Topography", colormap="Oranges", phys_unit="nm"):
         """
         使用Plotly生成SPM形貌圖並轉換為base64圖像
         
