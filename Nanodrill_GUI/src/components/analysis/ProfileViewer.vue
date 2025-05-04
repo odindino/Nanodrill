@@ -110,11 +110,11 @@
           </label>
         </div>
         
-        <!-- 峰值檢測敏感度 -->
+        <!-- 峰值敏感度 -->
         <div v-if="showPeaks">
           <div class="flex justify-between mb-1">
-            <label class="text-xs text-gray-600">峰值敏感度</label>
-            <span class="text-xs text-gray-600">{{ peakSensitivity.toFixed(1) }}</span>
+            <label class="text-xs text-gray-500">峰值敏感度</label>
+            <span class="text-xs text-gray-500">{{ peakSensitivity.toFixed(1) }}</span>
           </div>
           <input 
             type="range" 

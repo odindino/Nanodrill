@@ -1,5 +1,6 @@
+<!-- src/components/AnalysisView.vue -->
 <template>
-  <div class="h-full flex flex-col bg-white rounded-lg shadow overflow-hidden">
+  <div class="h-full flex flex-col bg-white rounded-lg shadow overflow-hidden relative">
     <!-- 沒有標籤頁時的歡迎畫面 -->
     <div v-if="analysisTabs.length === 0" class="flex flex-col items-center justify-center h-full p-6 text-center">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -10,285 +11,376 @@
     </div>
 
     <!-- 有標籤頁時的分析介面 -->
-    <div v-else class="h-full flex">
-      <AnalysisTabs
-        :tabs="analysisTabs"
-        :active-tab-id="activeTabId"
-        @tab-switched="switchTab"
-        @tab-closed="closeTab"
-        @tab-added="addTab"
-        @tab-updated="updateTab"
-        @group-to-tab="handleGroupToTab"
-        @create-line-profile="createLineProfile"
-      />
-    </div>
-    
-    <!-- 右側控制面板 -->
-    <div 
-      class="fixed right-0 top-16 bottom-10 bg-white shadow-lg transition-all duration-300 z-20 overflow-hidden border-l border-gray-200"
-      :class="{ 'w-0': !showControlPanel, 'w-80': showControlPanel }"
-    >
-      <div v-if="showControlPanel" class="h-full flex flex-col">
-        <!-- 控制面板標題 -->
-        <div class="px-4 py-3 bg-gray-100 border-b border-gray-200 flex items-center justify-between">
-          <h3 class="font-medium text-gray-700">控制面板</h3>
-          <button 
-            @click="toggleControlPanel"
-            class="p-1 rounded hover:bg-gray-200 text-gray-500 focus:outline-none"
+    <div v-else class="h-full flex relative">
+      <!-- 左側面板區域 -->
+      <div class="h-full flex flex-col">
+        <!-- 檔案選擇器迷你面板 -->
+        <div 
+          class="sidebar-panel bg-white border-r border-gray-200 transition-all duration-300 flex flex-col"
+          :class="showFileSelector ? 'w-80' : 'w-12'"
+        >
+          <!-- 標題或迷你按鈕 -->
+          <div 
+            class="flex items-center p-2 border-b border-gray-200 bg-gray-50"
+            :class="showFileSelector ? 'justify-between' : 'justify-center'"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        
-        <!-- 控制面板內容 - 根據當前視圖類型顯示不同內容 -->
-        <div class="flex-grow overflow-y-auto p-4">
-          <!-- 檔案選擇區 -->
-          <div v-if="activeTab">
-            <h3 class="text-sm font-medium text-gray-700 mb-2">選擇資料檔案</h3>
-            
-            <div class="mb-4">
-              <label class="text-xs text-gray-500 block mb-1">檔案選擇</label>
-              <select 
-                v-model="selectedFileId" 
-                class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                :disabled="!activeTab || !activeTab.relatedFiles || activeTab.relatedFiles.length === 0"
-              >
-                <option v-for="file in availableFiles" :key="file.path" :value="file.path">
-                  {{ file.name }}
-                </option>
-              </select>
-              <p v-if="!availableFiles || availableFiles.length === 0" class="text-xs text-gray-500 mt-1">
-                沒有可用的相關檔案
-              </p>
-            </div>
-            
+            <h3 v-if="showFileSelector" class="text-sm font-medium text-gray-700 truncate">檔案選擇</h3>
             <button 
-              @click="loadSelectedFile" 
-              class="w-full py-2 px-4 bg-primary text-white font-medium rounded transition-colors hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="!selectedFileId || isTabLoading"
+              @click="toggleFileSelector"
+              class="p-1.5 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
+              :title="showFileSelector ? '收起檔案選擇器' : '展開檔案選擇器'"
             >
-              <span v-if="isTabLoading">載入中...</span>
-              <span v-else>載入檔案</span>
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                class="h-5 w-5" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+                :class="{ 'transform rotate-180': showFileSelector }"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
           </div>
           
-          <!-- 檔案資訊區塊 -->
-          <div v-if="activeTab && activeTab.txtContent" class="mt-4 pt-4 border-t border-gray-200">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
-            
-            <div class="bg-white rounded-lg border border-gray-200 overflow-y-auto max-h-80">
-              <!-- 基本參數 -->
-              <div class="p-3">
-                <h4 class="font-medium text-sm border-b pb-1 mb-3">基本參數</h4>
+          <!-- 檔案選擇器內容 -->
+          <div v-if="showFileSelector" class="flex-grow overflow-y-auto p-4">
+            <div v-if="activeTab">
+              <h3 class="text-sm font-medium text-gray-700 mb-2">選擇分析檔案</h3>
+              
+              <div class="mb-4">
+                <label class="text-xs text-gray-500 block mb-1">檔案選擇</label>
+                <select 
+                  v-model="selectedFileId" 
+                  class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                  :disabled="!activeTab || !activeTab.relatedFiles || activeTab.relatedFiles.length === 0"
+                >
+                  <option v-for="file in availableFiles" :key="file.path" :value="file.path">
+                    {{ file.name }}
+                  </option>
+                </select>
+                <p v-if="!availableFiles || availableFiles.length === 0" class="text-xs text-gray-500 mt-1">
+                  沒有可用的相關檔案
+                </p>
+              </div>
+              
+              <button 
+                @click="loadSelectedFile" 
+                class="w-full py-2 px-4 bg-primary text-white font-medium rounded transition-colors hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="!selectedFileId || isTabLoading"
+              >
+                <span v-if="isTabLoading">載入中...</span>
+                <span v-else>載入檔案</span>
+              </button>
+              
+              <!-- 檔案資訊區塊 -->
+              <div v-if="activeTab && activeTab.txtContent" class="mt-4 pt-4 border-t border-gray-200">
+                <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
                 
-                <div class="grid grid-cols-1 gap-1.5">
-                  <!-- 參數項目 - 每個參數一行 -->
-                  <div v-for="(value, key) in parametersToDisplay" :key="key" class="info-row flex">
-                    <div class="text-sm font-medium text-gray-700 w-32 flex-shrink-0">{{ key }}:</div>
-                    <div class="text-sm text-gray-900 flex-1">{{ value }}</div>
+                <div class="bg-white rounded-lg border border-gray-200 overflow-y-auto max-h-80">
+                  <!-- 基本參數 -->
+                  <div class="p-3">
+                    <h4 class="font-medium text-sm border-b pb-1 mb-3">基本參數</h4>
+                    
+                    <div class="grid grid-cols-1 gap-1.5">
+                      <!-- 參數項目 - 每個參數一行 -->
+                      <div v-for="(value, key) in parametersToDisplay" :key="key" class="info-row flex">
+                        <div class="text-sm font-medium text-gray-700 w-32 flex-shrink-0">{{ key }}:</div>
+                        <div class="text-sm text-gray-900 flex-1">{{ value }}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- 形貌圖影像處理功能 -->
-          <div v-if="activeTab && activeTab.fileType === 'topo' && activeTab.imageData" class="mt-4 pt-4 border-t border-gray-200">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">影像處理</h3>
-            
-            <div class="space-y-4">
-              <!-- 平面校正 -->
-              <div>
-                <label class="text-xs text-gray-500 block mb-1">平面校正</label>
-                <div class="flex space-x-2">
-                  <button 
-                    @click="applyFlatten('mean')"
-                    class="flex-1 py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    線性平面化
-                  </button>
-                  <button 
-                    @click="applyFlatten('polyfit')"
-                    class="flex-1 py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    多項式平面化
-                  </button>
-                </div>
-              </div>
-              
-              <!-- 傾斜調整 -->
-              <div>
-                <label class="text-xs text-gray-500 block mb-1">傾斜調整</label>
-                <div class="grid grid-cols-2 gap-2">
-                  <div class="col-span-2 mb-1">
-                    <div class="flex items-center">
-                      <input 
-                        type="checkbox" 
-                        id="tilt-fine-tune" 
-                        v-model="fineTuneTilt"
-                        class="h-3 w-3 text-primary focus:ring-primary border-gray-300 rounded"
-                      >
-                      <label for="tilt-fine-tune" class="ml-1 text-xs text-gray-700">
-                        微調模式
-                      </label>
-                    </div>
-                  </div>
-                  <button 
-                    @click="adjustTilt('up')"
-                    class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    向上傾斜
-                  </button>
-                  <button 
-                    @click="adjustTilt('down')"
-                    class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    向下傾斜
-                  </button>
-                  <button 
-                    @click="adjustTilt('left')"
-                    class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    向左傾斜
-                  </button>
-                  <button 
-                    @click="adjustTilt('right')"
-                    class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    向右傾斜
-                  </button>
-                </div>
-              </div>
-              
-              <!-- 色彩映射 -->
-              <div>
-                <label class="text-xs text-gray-500 block mb-1">色彩映射</label>
-                <select 
-                  v-model="activeTabColormap" 
-                  class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                  @change="updateActiveTabSettings({colormap: activeTabColormap})"
-                >
-                  <option value="viridis">Viridis</option>
-                  <option value="plasma">Plasma</option>
-                  <option value="inferno">Inferno</option>
-                  <option value="magma">Magma</option>
-                  <option value="cividis">Cividis</option>
-                  <option value="Oranges">Oranges</option>
-                  <option value="hot">Hot</option>
-                  <option value="cool">Cool</option>
-                  <option value="jet">Jet</option>
-                </select>
-              </div>
-              
-              <!-- 高度縮放 -->
-              <div>
-                <div class="flex justify-between mb-1">
-                  <label class="text-xs text-gray-500">高度縮放</label>
-                  <span class="text-xs text-gray-500">{{ activeTabZScale.toFixed(1) }}x</span>
-                </div>
-                <input 
-                  type="range" 
-                  v-model="activeTabZScale" 
-                  min="0.1" 
-                  max="5" 
-                  step="0.1" 
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  @change="updateActiveTabSettings({zScale: activeTabZScale})"
-                >
-              </div>
-              
-              <!-- 剖面分析 -->
-              <div>
-                <label class="text-xs text-gray-500 block mb-1">剖面分析</label>
-                <button 
-                  @click="createLineProfile"
-                  class="w-full py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  建立線性剖面
-                </button>
-              </div>
+            <div v-else class="text-center text-gray-500 text-sm pt-4">
+              請先選擇一個分析標籤頁
             </div>
           </div>
           
-          <!-- 線性剖面設置 -->
-          <div v-else-if="activeViewer && activeViewer.component === 'ProfileViewer'" class="mt-4 pt-4 border-t border-gray-200">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">剖面設置</h3>
-            
-            <div class="space-y-3">
-              <div class="flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="shift-zero" 
-                  v-model="profileSettings.shiftZero"
-                  class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                  @change="updateProfile"
-                >
-                <label for="shift-zero" class="ml-2 text-sm text-gray-700">
-                  將最小值歸零
-                </label>
-              </div>
-              
-              <div class="flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="auto-scale" 
-                  v-model="profileSettings.autoScale"
-                  class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                  @change="updateProfile"
-                >
-                <label for="auto-scale" class="ml-2 text-sm text-gray-700">
-                  自動縮放
-                </label>
-              </div>
-              
-              <div class="flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="show-peaks" 
-                  v-model="profileSettings.showPeaks"
-                  class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                  @change="updateProfile"
-                >
-                <label for="show-peaks" class="ml-2 text-sm text-gray-700">
-                  顯示峰值
-                </label>
-              </div>
-              
-              <div v-if="profileSettings.showPeaks">
-                <div class="flex justify-between mb-1">
-                  <label class="text-xs text-gray-500">峰值敏感度</label>
-                  <span class="text-xs text-gray-500">{{ profileSettings.peakSensitivity.toFixed(1) }}</span>
+          <!-- 迷你模式下只顯示圖標 -->
+          <div v-else class="flex-grow flex flex-col items-center pt-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+        </div>
+        
+        <!-- 工具列迷你面板 -->
+        <div 
+          class="sidebar-panel bg-white border-r border-gray-200 transition-all duration-300 flex flex-col mt-2"
+          :class="showToolsPanel ? 'w-80' : 'w-12'"
+        >
+          <!-- 標題或迷你按鈕 -->
+          <div 
+            class="flex items-center p-2 border-b border-gray-200 bg-gray-50"
+            :class="showToolsPanel ? 'justify-between' : 'justify-center'"
+          >
+            <h3 v-if="showToolsPanel" class="text-sm font-medium text-gray-700 truncate">工具列</h3>
+            <button 
+              @click="toggleToolsPanel"
+              class="p-1.5 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
+              :title="showToolsPanel ? '收起工具列' : '展開工具列'"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                class="h-5 w-5" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+                :class="{ 'transform rotate-180': showToolsPanel }"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          </div>
+          
+          <!-- 工具列內容 -->
+          <div v-if="showToolsPanel" class="flex-grow overflow-y-auto p-4">
+            <template v-if="activeViewer">
+              <div v-if="activeViewer.component === 'ImageViewer'" class="space-y-4">
+                <h4 class="font-medium text-sm border-b pb-2 mb-2">影像處理</h4>
+                
+                <!-- 平面校正工具 -->
+                <div>
+                  <label class="text-xs text-gray-500 block mb-1">平面校正</label>
+                  <div class="flex space-x-2">
+                    <button 
+                      @click="applyFlatten('mean')"
+                      class="flex-1 py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      線性平面化
+                    </button>
+                    <button 
+                      @click="applyFlatten('polyfit')"
+                      class="flex-1 py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      多項式平面化
+                    </button>
+                  </div>
                 </div>
-                <input 
-                  type="range" 
-                  v-model="profileSettings.peakSensitivity" 
-                  min="0.1" 
-                  max="5" 
-                  step="0.1" 
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  @change="updateProfile"
-                >
+                
+                <!-- 傾斜調整工具 -->
+                <div>
+                  <label class="text-xs text-gray-500 block mb-1">傾斜調整</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="col-span-2 mb-1">
+                      <div class="flex items-center">
+                        <input 
+                          type="checkbox" 
+                          id="tilt-fine-tune" 
+                          v-model="fineTuneTilt"
+                          class="h-3 w-3 text-primary focus:ring-primary border-gray-300 rounded"
+                        >
+                        <label for="tilt-fine-tune" class="ml-1 text-xs text-gray-700">
+                          微調模式
+                        </label>
+                      </div>
+                    </div>
+                    <button 
+                      @click="adjustTilt('up')"
+                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      向上傾斜
+                    </button>
+                    <button 
+                      @click="adjustTilt('down')"
+                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      向下傾斜
+                    </button>
+                    <button 
+                      @click="adjustTilt('left')"
+                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      向左傾斜
+                    </button>
+                    <button 
+                      @click="adjustTilt('right')"
+                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      向右傾斜
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- 色彩映射 -->
+                <div>
+                  <label class="text-xs text-gray-500 block mb-1">色彩映射</label>
+                  <select 
+                    v-model="activeTabColormap" 
+                    class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                    @change="updateActiveTabSettings({colormap: activeTabColormap})"
+                  >
+                    <option value="viridis">Viridis</option>
+                    <option value="plasma">Plasma</option>
+                    <option value="inferno">Inferno</option>
+                    <option value="magma">Magma</option>
+                    <option value="cividis">Cividis</option>
+                    <option value="Oranges">Oranges</option>
+                    <option value="hot">Hot</option>
+                    <option value="cool">Cool</option>
+                    <option value="jet">Jet</option>
+                  </select>
+                </div>
+                
+                <!-- 高度縮放 -->
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <label class="text-xs text-gray-500">高度縮放</label>
+                    <span class="text-xs text-gray-500">{{ activeTabZScale.toFixed(1) }}x</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    v-model="activeTabZScale" 
+                    min="0.1" 
+                    max="5" 
+                    step="0.1" 
+                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    @change="updateActiveTabSettings({zScale: activeTabZScale})"
+                  >
+                </div>
+                
+                <!-- 剖面分析 -->
+                <div>
+                  <label class="text-xs text-gray-500 block mb-1">剖面分析</label>
+                  <button 
+                    @click="createLineProfile"
+                    class="w-full py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    建立線性剖面
+                  </button>
+                </div>
               </div>
+              
+              <!-- 剖面視圖工具 -->
+              <div v-else-if="activeViewer.component === 'ProfileViewer'" class="space-y-4">
+                <h4 class="font-medium text-sm border-b pb-2 mb-2">剖面設定</h4>
+                
+                <!-- 將最小值歸零選項 -->
+                <div class="flex items-center">
+                  <input 
+                    type="checkbox" 
+                    id="shift-zero" 
+                    v-model="profileSettings.shiftZero"
+                    class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    @change="updateProfile"
+                  >
+                  <label for="shift-zero" class="ml-2 text-sm text-gray-700">
+                    將最小值歸零
+                  </label>
+                </div>
+                
+                <!-- 自動縮放選項 -->
+                <div class="flex items-center">
+                  <input 
+                    type="checkbox" 
+                    id="auto-scale" 
+                    v-model="profileSettings.autoScale"
+                    class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    @change="updateProfile"
+                  >
+                  <label for="auto-scale" class="ml-2 text-sm text-gray-700">
+                    自動縮放
+                  </label>
+                </div>
+                
+                <!-- 顯示峰值選項 -->
+                <div class="flex items-center">
+                  <input 
+                    type="checkbox" 
+                    id="show-peaks" 
+                    v-model="profileSettings.showPeaks"
+                    class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    @change="updateProfile"
+                  >
+                  <label for="show-peaks" class="ml-2 text-sm text-gray-700">
+                    顯示峰值
+                  </label>
+                </div>
+                
+                <!-- 峰值敏感度 -->
+                <div v-if="profileSettings.showPeaks">
+                  <div class="flex justify-between mb-1">
+                    <label class="text-xs text-gray-500">峰值敏感度</label>
+                    <span class="text-xs text-gray-500">{{ profileSettings.peakSensitivity.toFixed(1) }}</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    v-model="profileSettings.peakSensitivity" 
+                    min="0.1" 
+                    max="5" 
+                    step="0.1" 
+                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    @change="updateProfile"
+                  >
+                </div>
+              </div>
+              
+              <div v-else class="p-4 text-center text-gray-500">
+                <p>無可用工具</p>
+              </div>
+            </template>
+            
+            <div v-else class="p-4 text-center text-gray-500">
+              <p>請選擇一個視圖來顯示相應工具</p>
             </div>
+          </div>
+          
+          <!-- 迷你模式下只顯示圖標 -->
+          <div v-else class="flex-grow flex flex-col items-center pt-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 主要分析標籤頁區域 -->
+      <div class="flex-1 h-full">
+        <AnalysisTabs
+          :tabs="analysisTabs"
+          :active-tab-id="activeTabId"
+          @tab-switched="switchTab"
+          @tab-closed="closeTab"
+          @tab-added="addTab"
+          @tab-updated="updateTab"
+          @group-to-tab="handleGroupToTab"
+          @create-line-profile="createLineProfile"
+        />
+      </div>
+
+      <!-- 載入中顯示 -->
+      <div v-if="isTabLoading" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
+          <div class="w-12 h-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
+          <p class="text-gray-600">正在載入資料...</p>
+        </div>
+      </div>
+
+      <!-- 錯誤提示 -->
+      <div v-if="tabLoadError" 
+           class="absolute top-4 right-4 max-w-md p-4 bg-red-50 border-l-4 border-red-400 text-red-700 z-50 rounded shadow-md">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <p class="text-sm">{{ tabLoadError }}</p>
+          </div>
+          <div class="ml-auto pl-3">
+            <button @click="tabLoadError = ''" class="text-red-400 hover:text-red-500 focus:outline-none">
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
     </div>
-    
-    <!-- 控制面板展開/收起按鈕 -->
-    <button 
-      v-if="!showControlPanel && activeTab"
-      @click="toggleControlPanel"
-      class="fixed right-4 top-20 p-2 bg-white rounded-full shadow-md text-gray-600 hover:bg-gray-100 focus:outline-none z-20"
-      title="顯示控制面板"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    </button>
   </div>
 </template>
 
@@ -309,8 +401,9 @@ export default defineComponent({
     const isTabLoading = ref(false);
     const tabLoadError = ref('');
     
-    // 控制面板狀態
-    const showControlPanel = ref(true);
+    // 側邊面板狀態
+    const showFileSelector = ref(true);
+    const showToolsPanel = ref(true);
     
     // 取得資料
     const analysisTabs = computed(() => spmDataStore.analysisTabs);
@@ -384,15 +477,14 @@ export default defineComponent({
       return params;
     });
     
-    // 格式化數字
-    const formatNumber = (value: number) => {
-      if (value === undefined || value === null) return 'N/A';
-      return value.toFixed(2);
+    // 切換檔案選擇器
+    const toggleFileSelector = () => {
+      showFileSelector.value = !showFileSelector.value;
     };
     
-    // 切換控制面板
-    const toggleControlPanel = () => {
-      showControlPanel.value = !showControlPanel.value;
+    // 切換工具面板
+    const toggleToolsPanel = () => {
+      showToolsPanel.value = !showToolsPanel.value;
     };
     
     // 切換標籤頁
@@ -576,7 +668,7 @@ export default defineComponent({
         
         if (newTab) {
           // 自動顯示控制面板
-          showControlPanel.value = true;
+          showFileSelector.value = true;
           
           // 自動載入第一個可用的 INT 檔案
           const intFile = newTab.relatedFiles?.find(f => f.path.toLowerCase().endsWith('.int'));
@@ -603,7 +695,7 @@ export default defineComponent({
         
         // 如果沒有圖像數據，自動顯示控制面板
         if (!activeTab.value.imageData && !activeTab.value.viewerGroups) {
-          showControlPanel.value = true;
+          showFileSelector.value = true;
           
           // 自動載入第一個 INT 檔案
           const intFile = activeTab.value.relatedFiles?.find(f => f.path.toLowerCase().endsWith('.int'));
@@ -629,7 +721,8 @@ export default defineComponent({
       activeTabColormap,
       activeTabZScale,
       parametersToDisplay,
-      showControlPanel,
+      showFileSelector,
+      showToolsPanel,
       
       // 影像處理
       fineTuneTilt,
@@ -645,8 +738,8 @@ export default defineComponent({
       profileSettings,
       
       // 方法
-      formatNumber,
-      toggleControlPanel,
+      toggleFileSelector,
+      toggleToolsPanel,
       switchTab,
       closeTab,
       addTab,
@@ -683,10 +776,18 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
+/* 側邊面板高度設置 */
+.sidebar-panel {
+  max-height: calc(50vh - 30px);
+  min-height: 200px;
+}
+
+/* 最大高度限制 */
 .max-h-80 {
   max-height: 20rem;
 }
 
+/* 滾動條樣式 */
 .max-h-80::-webkit-scrollbar {
   width: 6px;
 }
