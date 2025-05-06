@@ -7,7 +7,7 @@
     <div class="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
       <h3 class="text-sm font-medium text-gray-700 truncate">{{ title || 'Image Viewer' }}</h3>
       
-      <div class="flex space-x-1">
+      <div class="flex space-x-2">
         <!-- 線性剖面按鈕 -->
         <button 
           v-if="allowProfile && !hideControls" 
@@ -36,7 +36,7 @@
     </div>
     
     <!-- 主要圖像顯示區域 -->
-    <div class="flex-grow overflow-hidden relative" ref="imageContainer">
+    <div class="flex-grow overflow-hidden relative min-h-[400px]" ref="imageContainer">
       <!-- 載入中顯示 -->
       <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-gray-50">
         <div class="flex flex-col items-center">
@@ -347,29 +347,45 @@ export default defineComponent({
         x: x,
         y: y,
         type: 'heatmap',
-        colorscale: props.colormap,
+        colorscale: props.colormap || 'Oranges', // 確保使用 Oranges 為預設
         showscale: true,
         zauto: true
       }];
       
-      // 準備布局
+      // 準備布局 - 參考第二張截圖的風格
       const layout = {
         title: '',
-        margin: { l: 50, r: 50, b: 50, t: 30 },
+        margin: { l: 50, r: 80, b: 50, t: 30 }, // 增加右側邊距以容納色彩條
         xaxis: {
           title: `X (${props.physUnit})`,
-          constrain: 'domain'
+          constrain: 'domain',
+          showgrid: true,
+          gridcolor: '#e5e5e5',
+          gridwidth: 1,
+          linewidth: 2, // 增加軸線粗細
+          linecolor: 'black'
         },
         yaxis: {
           title: `Y (${props.physUnit})`,
           scaleanchor: 'x',
-          constrain: 'domain'
+          constrain: 'domain',
+          showgrid: true,
+          gridcolor: '#e5e5e5',
+          gridwidth: 1,
+          linewidth: 2, // 增加軸線粗細
+          linecolor: 'black'
         },
         coloraxis: {
           colorbar: {
-            title: `Height (${props.physUnit})`
+            title: `Height (${props.physUnit})`,
+            titleside: 'right',
+            outlinewidth: 1, // 添加色彩條邊框
+            outlinecolor: 'black',
+            thickness: 20 // 增加色彩條的寬度
           }
         },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
         autosize: true
       };
       
@@ -379,7 +395,7 @@ export default defineComponent({
         displayModeBar: true,
         modeBarButtonsToRemove: [
           'toImage', 'sendDataToCloud', 'editInChartStudio', 
-          'toggleHover', 'toggleSpikelines', 'resetScale2d'
+          'toggleHover', 'toggleSpikelines'
         ],
         displaylogo: false
       };
@@ -399,8 +415,8 @@ export default defineComponent({
       
       // 更新數據和顏色映射
       Plotly.update(plotlyInstance, {
-        z: [props.imageRawData],
-        colorscale: [props.colormap]
+        'z': [props.imageRawData],
+        'colorscale': props.colormap || 'Oranges' // 確保正確應用顏色映射
       });
     };
     

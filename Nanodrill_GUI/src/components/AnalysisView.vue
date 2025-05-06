@@ -548,6 +548,7 @@ export default defineComponent({
               component: 'ImageViewer',
               props: {
                 imageData: response.image,
+                imageRawData: response.rawData, // 確保傳遞原始數據
                 title: fileName,
                 imageType: 'topo',
                 physUnit: response.physUnit || 'nm',
@@ -603,8 +604,77 @@ export default defineComponent({
     
     // 創建線性剖面
     const createLineProfile = (data: any) => {
-      // 實現創建線性剖面的邏輯
-      lineProfileMode.value = true;
+          // 實現創建線性剖面的邏輯
+          lineProfileMode.value = true;
+        };
+
+        const handleCreateLineProfile = (data: any) => {
+      if (!activeTab.value || !activeGroupId.value) return;
+      
+      // 查找當前活動的群組
+      const groupIndex = activeTab.value.viewerGroups.findIndex(g => g.id === activeGroupId.value);
+      if (groupIndex === -1) return;
+      
+      // 當接收到線性剖面事件時
+      const handleLineProfile = (eventData: any) => {
+        if (!eventData.profile) return;
+        
+        // 創建新的 ProfileViewer
+        const profileViewer = {
+          id: `viewer-profile-${Date.now()}`,
+          component: 'ProfileViewer',
+          props: {
+            profileData: eventData.profile,
+            title: 'Line Profile',
+            physUnit: eventData.unit || 'nm',
+            isActive: true,
+            showStats: true,
+            initialShiftZero: false,
+            initialAutoScale: true,
+            initialShowPeaks: false
+          }
+        };
+        
+        // 更新群組中的視圖
+        const updatedGroups = [...activeTab.value.viewerGroups];
+        const currentGroup = updatedGroups[groupIndex];
+        
+        // 設置所有視圖為非活動
+        currentGroup.viewers = currentGroup.viewers.map(viewer => ({
+          ...viewer,
+          props: {
+            ...viewer.props,
+            isActive: false
+          }
+        }));
+        
+        // 添加新的剖面視圖
+        currentGroup.viewers.push(profileViewer);
+        
+        // 更新標籤頁數據
+        spmDataStore.updateAnalysisTabData(activeTabId.value, {
+          viewerGroups: updatedGroups
+        });
+      };
+      
+      // 綁定剖面事件處理
+      const viewer = activeTab.value.viewerGroups[groupIndex].viewers.find(v => v.id === data.sourceViewerId);
+      if (viewer) {
+        // 這裡假設你已經在當前函數範圍內實例化了一個 ImageViewer
+        // 實際上，你需要確保此處能夠正確地將 handleLineProfile 綁定到 ImageViewer 的事件上
+        // 由於是在 Vue 中使用，你可能需要通過其他方式實現事件傳遞
+        
+        // 這裡的實現是一個簡化版，你可能需要根據你的應用架構調整
+        viewer.props = {
+          ...viewer.props,
+          onLineProfile: handleLineProfile
+        };
+        
+        // 更新標籤頁數據
+        spmDataStore.updateAnalysisTabData(activeTabId.value, {
+          viewerGroups: [...activeTab.value.viewerGroups]
+        });
+      }
     };
     
     // 更新剖面圖

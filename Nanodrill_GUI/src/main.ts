@@ -3,6 +3,9 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import './styles.css';  // 確保路徑正確
+import 'plotly.js-dist-min';
+
+
 
 // 註冊分析組件
 import ImageViewer from './components/analysis/ImageViewer.vue';

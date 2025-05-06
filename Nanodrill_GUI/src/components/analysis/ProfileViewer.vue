@@ -1,18 +1,19 @@
-<!-- src/components/analysis/ProfileViewer.vue -->
+// src/components/analysis/ProfileViewer.vue 修改
+
 <template>
   <div class="profile-viewer h-full flex flex-col bg-white rounded-lg overflow-hidden"
        :class="{ 'ring-2 ring-primary': isActive }"
        @click="handleClick">
     <!-- 控制欄 -->
-    <div class="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
+    <div class="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
       <h3 class="text-sm font-medium text-gray-700 truncate">{{ title || 'Profile Viewer' }}</h3>
       
-      <div class="flex space-x-1">
+      <div class="flex space-x-2">
         <!-- 設定按鈕 -->
         <button 
           v-if="!hideControls" 
           @click.stop="toggleSettings"
-          class="p-1 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
+          class="p-1.5 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
           :class="{ 'bg-blue-100 text-blue-600': showSettings }"
           title="設定"
         >
@@ -26,7 +27,7 @@
         <button 
           v-if="allowClose" 
           @click.stop="$emit('close')"
-          class="p-1 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
+          class="p-1.5 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
           title="關閉"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -37,7 +38,7 @@
     </div>
     
     <!-- 主要剖面圖顯示區域 -->
-    <div class="flex-grow overflow-hidden relative" ref="profileContainer">
+    <div class="flex-grow overflow-hidden relative min-h-[300px]" ref="profileContainer">
       <!-- 載入中顯示 -->
       <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-gray-50">
         <div class="flex flex-col items-center">
@@ -46,13 +47,8 @@
         </div>
       </div>
       
-      <!-- 實際剖面圖 -->
-      <div v-else-if="profileImage" class="h-full w-full flex items-center justify-center p-2">
-        <img 
-          :src="'data:image/png;base64,' + profileImage" 
-          :alt="title" 
-          class="max-h-full max-w-full object-contain" />
-      </div>
+      <!-- Plotly 剖面圖 -->
+      <div v-else-if="profileData" class="h-full w-full" ref="plotlyContainer"></div>
       
       <!-- 無數據提示 -->
       <div v-else class="absolute inset-0 flex items-center justify-center bg-gray-50">
@@ -65,72 +61,8 @@
       </div>
     </div>
     
-    <!-- 設置面板 -->
-    <div v-if="showSettings" class="border-t border-gray-200 p-3 bg-gray-50">
-      <div class="space-y-3">
-        <!-- 將最小值歸零選項 -->
-        <div class="flex items-center">
-          <input 
-            type="checkbox" 
-            id="shift-zero" 
-            v-model="shiftZero"
-            class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-            @change="updateProfileAndEmit"
-          >
-          <label for="shift-zero" class="ml-2 text-sm text-gray-700">
-            將最小值歸零
-          </label>
-        </div>
-        
-        <!-- 自動縮放選項 -->
-        <div class="flex items-center">
-          <input 
-            type="checkbox" 
-            id="auto-scale" 
-            v-model="autoScale"
-            class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-            @change="updateProfileAndEmit"
-          >
-          <label for="auto-scale" class="ml-2 text-sm text-gray-700">
-            自動縮放
-          </label>
-        </div>
-        
-        <!-- 顯示峰值選項 -->
-        <div class="flex items-center">
-          <input 
-            type="checkbox" 
-            id="show-peaks" 
-            v-model="showPeaks"
-            class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-            @change="updateProfileAndEmit"
-          >
-          <label for="show-peaks" class="ml-2 text-sm text-gray-700">
-            顯示峰值
-          </label>
-        </div>
-        
-        <!-- 峰值敏感度 -->
-        <div v-if="showPeaks">
-          <div class="flex justify-between mb-1">
-            <label class="text-xs text-gray-500">峰值敏感度</label>
-            <span class="text-xs text-gray-500">{{ peakSensitivity.toFixed(1) }}</span>
-          </div>
-          <input 
-            type="range" 
-            v-model="peakSensitivity" 
-            min="0.1" 
-            max="5" 
-            step="0.1" 
-            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            @change="updateProfileAndEmit"
-          >
-        </div>
-      </div>
-    </div>
-    
     <!-- 統計信息面板 -->
-    <div v-if="showStats && roughness" class="py-1 px-3 bg-gray-50 border-t border-gray-200 text-xs">
+    <div v-if="showStats && roughness" class="py-2 px-3 bg-gray-50 border-t border-gray-200 text-xs">
       <div class="grid grid-cols-4 gap-2">
         <div class="text-gray-600">
           <span class="font-medium">Ra:</span> {{ formatNumber(roughness.Ra) }} {{ physUnit }}
@@ -150,8 +82,9 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed} from 'vue';
+import { defineComponent, ref, computed, onMounted, watch } from 'vue';
 import type { PropType } from 'vue';
+import Plotly from 'plotly.js-dist-min';
 
 // 粗糙度介面
 interface Roughness {
@@ -173,10 +106,6 @@ interface ProfileData {
 export default defineComponent({
   name: 'ProfileViewer',
   props: {
-    profileImage: {
-      type: String,
-      default: ''
-    },
     profileData: {
       type: Object as PropType<ProfileData | null>,
       default: null
@@ -234,6 +163,8 @@ export default defineComponent({
   setup(props, { emit }) {
     // 設置面板控制
     const showSettings = ref(false);
+    const plotlyContainer = ref<HTMLElement | null>(null);
+    let plotlyInstance: any = null;
     
     // 剖面圖設置
     const shiftZero = ref(props.initialShiftZero);
@@ -262,18 +193,172 @@ export default defineComponent({
       showSettings.value = !showSettings.value;
     };
     
-    // 更新剖面圖及發送設置變更事件
-    const updateProfileAndEmit = () => {
-      const settings = {
+    // 創建 Plotly 剖面圖
+    const createPlotlyChart = () => {
+      if (!props.profileData || !plotlyContainer.value) return;
+      
+      const { distance, height } = props.profileData;
+      
+      // 準備數據
+      const data = [{
+        x: distance,
+        y: height,
+        type: 'scatter',
+        mode: 'lines',
+        line: {
+          color: 'royalblue',
+          width: 2
+        },
+        name: 'Height Profile'
+      }];
+      
+      // 如果啟用了查找峰值
+      if (showPeaks.value && height.length > 0) {
+        // 這裏應該加入峰值檢測邏輯
+        // 簡單的例子：找出局部最大值
+        const peaks = findPeaks(distance, height, peakSensitivity.value);
+        
+        if (peaks.indices.length > 0) {
+          data.push({
+            x: peaks.positions,
+            y: peaks.heights,
+            type: 'scatter',
+            mode: 'markers',
+            marker: {
+              color: 'red',
+              size: 8,
+              symbol: 'circle'
+            },
+            name: 'Peaks'
+          });
+        }
+      }
+      
+      // 計算統計數據
+      const min = Math.min(...height);
+      const max = Math.max(...height);
+      const range = max - min;
+      const mean = height.reduce((a, b) => a + b, 0) / height.length;
+      
+      // 設置布局
+      const layout = {
+        title: '',
+        xaxis: {
+          title: `Distance (${props.physUnit})`,
+          showgrid: true,
+          gridcolor: '#e5e5e5',
+          gridwidth: 1,
+          linewidth: 2,
+          linecolor: 'black'
+        },
+        yaxis: {
+          title: `Height (${props.physUnit})`,
+          showgrid: true,
+          gridcolor: '#e5e5e5',
+          gridwidth: 1,
+          linewidth: 2,
+          linecolor: 'black'
+        },
+        margin: { l: 60, r: 30, t: 30, b: 60 },
+        showlegend: false,
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        autosize: true
+      };
+      
+      // 如果不是自動縮放，設置固定的y軸範圍
+      if (!autoScale.value) {
+        layout.yaxis.range = [min - range * 0.05, max + range * 0.05];
+      }
+      
+      // 如果將最小值歸零
+      if (shiftZero.value) {
+        const shiftedHeight = height.map(h => h - min);
+        data[0].y = shiftedHeight;
+        
+        // 同時調整峰值的高度
+        if (data.length > 1) {
+          data[1].y = data[1].y.map(h => h - min);
+        }
+        
+        // 調整y軸範圍
+        if (!autoScale.value) {
+          layout.yaxis.range = [0, range * 1.05];
+        }
+      }
+      
+      // 設置配置
+      const config = {
+        responsive: true,
+        displayModeBar: true,
+        modeBarButtonsToRemove: [
+          'toImage', 'sendDataToCloud', 'editInChartStudio'
+        ],
+        displaylogo: false
+      };
+      
+      // 創建圖表
+      Plotly.newPlot(plotlyContainer.value, data, layout, config);
+      
+      // 保存圖表實例
+      plotlyInstance = plotlyContainer.value;
+    };
+    
+    // 簡單的峰值檢測函數
+    const findPeaks = (x: number[], y: number[], sensitivity = 1.0) => {
+      const indices: number[] = [];
+      const positions: number[] = [];
+      const heights: number[] = [];
+      
+      // 簡單的局部最大值檢測
+      for (let i = 1; i < y.length - 1; i++) {
+        // 檢查當前點是否大於相鄰點
+        if (y[i] > y[i-1] && y[i] > y[i+1]) {
+          // 使用敏感度過濾雜訊
+          const threshold = (Math.max(...y) - Math.min(...y)) * 0.02 / sensitivity;
+          if (y[i] - y[i-1] > threshold && y[i] - y[i+1] > threshold) {
+            indices.push(i);
+            positions.push(x[i]);
+            heights.push(y[i]);
+          }
+        }
+      }
+      
+      return { indices, positions, heights };
+    };
+    
+    // 更新剖面圖
+    const updateProfileChart = () => {
+      if (plotlyInstance) {
+        Plotly.purge(plotlyInstance);
+      }
+      createPlotlyChart();
+    };
+    
+    // 監視剖面數據變化
+    watch(() => props.profileData, () => {
+      updateProfileChart();
+    }, { deep: true });
+    
+    // 監視設置變化
+    watch([shiftZero, autoScale, showPeaks, peakSensitivity], () => {
+      updateProfileChart();
+      
+      // 發送設置更新事件
+      emit('update:settings', {
         shiftZero: shiftZero.value,
         autoScale: autoScale.value,
         showPeaks: showPeaks.value,
         peakSensitivity: peakSensitivity.value
-      };
-      
-      emit('update:settings', settings);
-      emit('refresh');
-    };
+      });
+    });
+    
+    // 組件掛載時創建圖表
+    onMounted(() => {
+      if (props.profileData) {
+        createPlotlyChart();
+      }
+    });
     
     return {
       showSettings,
@@ -282,38 +367,11 @@ export default defineComponent({
       showPeaks,
       peakSensitivity,
       profileLength,
+      plotlyContainer,
       formatNumber,
       handleClick,
-      toggleSettings,
-      updateProfileAndEmit
+      toggleSettings
     };
   }
 });
 </script>
-
-<style scoped>
-/* 自定義樣式 */
-.profile-viewer.active {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
-  outline-offset: -2px;
-}
-
-/* 自定義範圍輸入滑塊 */
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  background: #2563eb;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: #2563eb;
-  border-radius: 50%;
-  cursor: pointer;
-}
-</style>
