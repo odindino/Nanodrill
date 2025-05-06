@@ -355,7 +355,7 @@ export default defineComponent({
       // 準備布局 - 參考第二張截圖的風格
       const layout = {
         title: '',
-        margin: { l: 50, r: 80, b: 50, t: 30 }, // 增加右側邊距以容納色彩條
+        margin: { l: 50, r: 150, b: 65, t: 25 }, // 增加右側邊距以容納色彩條
         xaxis: {
           title: `X (${props.physUnit})`,
           constrain: 'domain',
@@ -386,15 +386,27 @@ export default defineComponent({
         },
         plot_bgcolor: 'white',
         paper_bgcolor: 'white',
-        autosize: true
+        autosize: true,
+        modebar: {
+          bgcolor: 'white',
+          color: 'black',
+          activecolor: 'blue',
+          orientation: 'v'
+        },
+        'toImageButtonOptions': {
+          'format': 'svg', // one of png, svg, jpeg, webp
+          'filename': 'custom_image',
+          'height': 500,
+          'width': 700,
+          'scale': 1 // Multiply title/legend/axis/canvas sizes by this factor
+        },
       };
       
       // 設置配置
       const config = {
         responsive: true,
-        displayModeBar: true,
         modeBarButtonsToRemove: [
-          'toImage', 'sendDataToCloud', 'editInChartStudio', 
+          'sendDataToCloud', 'editInChartStudio', 
           'toggleHover', 'toggleSpikelines'
         ],
         displaylogo: false
