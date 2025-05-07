@@ -287,6 +287,7 @@ export default defineComponent({
         sendProfileData();
       }
     };
+
     
     // 處理鼠標移動事件
     const handleMouseMove = (event: MouseEvent) => {

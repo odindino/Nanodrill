@@ -32,6 +32,7 @@ export const useAnalysisStore = defineStore('analysis', {
     
     // 測量模式
     measureMode: false,
+    currentMeasuringViewerId: '', // 添加：當前正在測量的ViewerId
     
     // 活動視圖信息
     activeTabId: '',
@@ -182,11 +183,15 @@ export const useAnalysisStore = defineStore('analysis', {
           
           // 關閉測量模式
           this.measureMode = false;
+          this.currentMeasuringViewerId = '';
           
           // 如果有目標剖面視圖，更新其數據
           if (data.targetProfileViewer) {
             this.updateProfileViewer(data.targetProfileViewer.id, this.profileData, this.roughness);
           }
+          
+          // 更新 ImageViewer 的測量模式狀態
+          this.updateImageViewerMeasureMode(data.sourceViewerId, false);
         } else {
           this.errorMessage = response.error || '獲取剖面失敗';
         }
@@ -291,65 +296,65 @@ export const useAnalysisStore = defineStore('analysis', {
     },
     
     /**
-     * 切換測量模式
+     * 更新特定 ImageViewer 的測量模式狀態
      */
-    toggleMeasureMode() {
-      this.measureMode = !this.measureMode;
+    updateImageViewerMeasureMode(imageViewerId: string, mode: boolean) {
+      const spmDataStore = useSpmDataStore();
+      const location = spmDataStore.getViewerLocation(imageViewerId);
       
-      // 如果退出測量模式，更新所有 ImageViewer 的測量模式狀態
-      if (!this.measureMode) {
-        this.updateAllImageViewersMeasureMode(false);
-      }
+      if (!location) return;
+      
+      const { tabId, groupId, viewerIndex } = location;
+      const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
+      if (!tab || !tab.viewerGroups) return;
+      
+      const groupIndex = tab.viewerGroups.findIndex(g => g.id === groupId);
+      if (groupIndex === -1) return;
+      
+      const group = tab.viewerGroups[groupIndex];
+      const viewer = group.viewers[viewerIndex];
+      
+      // 確保是 ImageViewer
+      if (viewer.component !== 'ImageViewer') return;
+      
+      // 更新 ImageViewer 的測量模式
+      const updatedViewers = [...group.viewers];
+      updatedViewers[viewerIndex] = {
+        ...viewer,
+        props: {
+          ...viewer.props,
+          profileMeasureMode: mode
+        }
+      };
+      
+      // 更新群組
+      const updatedGroups = [...tab.viewerGroups];
+      updatedGroups[groupIndex] = {
+        ...group,
+        viewers: updatedViewers
+      };
+      
+      // 更新標籤頁
+      spmDataStore.updateAnalysisTabData(tabId, {
+        viewerGroups: updatedGroups
+      });
     },
     
     /**
-     * 更新所有 ImageViewer 的測量模式狀態
+     * 切換測量模式
      */
-    updateAllImageViewersMeasureMode(mode: boolean) {
-      const spmDataStore = useSpmDataStore();
-      
-      for (const tab of spmDataStore.analysisTabs) {
-        if (tab.viewerGroups) {
-          const updatedGroups = [...tab.viewerGroups];
-          let groupsUpdated = false;
-          
-          // 更新每個群組中的 ImageViewer
-          for (let i = 0; i < updatedGroups.length; i++) {
-            const group = updatedGroups[i];
-            let viewersUpdated = false;
-            
-            const updatedViewers = group.viewers.map(viewer => {
-              if (viewer.component === 'ImageViewer') {
-                viewersUpdated = true;
-                return {
-                  ...viewer,
-                  props: {
-                    ...viewer.props,
-                    profileMeasureMode: mode,
-                    targetProfileViewer: mode ? viewer.props.targetProfileViewer : null
-                  }
-                };
-              }
-              return viewer;
-            });
-            
-            if (viewersUpdated) {
-              groupsUpdated = true;
-              updatedGroups[i] = {
-                ...group,
-                viewers: updatedViewers
-              };
-            }
-          }
-          
-          // 如果有更新，更新標籤頁
-          if (groupsUpdated) {
-            spmDataStore.updateAnalysisTabData(tab.id, {
-              viewerGroups: updatedGroups
-            });
-          }
-        }
+    toggleMeasureMode(viewerId: string) {
+      // 如果已經在測量其他視圖，先關閉該視圖的測量模式
+      if (this.measureMode && this.currentMeasuringViewerId && this.currentMeasuringViewerId !== viewerId) {
+        this.updateImageViewerMeasureMode(this.currentMeasuringViewerId, false);
       }
+      
+      // 切換當前視圖的測量模式
+      this.measureMode = !this.measureMode;
+      this.currentMeasuringViewerId = this.measureMode ? viewerId : '';
+      
+      // 更新視圖的測量模式狀態
+      this.updateImageViewerMeasureMode(viewerId, this.measureMode);
     },
     
     /**
@@ -482,7 +487,6 @@ export const useAnalysisStore = defineStore('analysis', {
       // 檢查此 ImageViewer 是否已經有綁定的 ProfileViewer
       if (sourceViewer.props.linkedProfileViewerId) {
         console.log("此 ImageViewer 已綁定 ProfileViewer:", sourceViewer.props.linkedProfileViewerId);
-        // 可以提示用戶，或激活已綁定的 ProfileViewer
         
         // 找到並激活已存在的 ProfileViewer
         for (const group of tab.viewerGroups) {
@@ -498,6 +502,9 @@ export const useAnalysisStore = defineStore('analysis', {
         // 如果找不到已綁定的 ProfileViewer (可能已被刪除)，則重置 ImageViewer 的綁定
         this.updateImageViewerBinding(sourceViewerId, null);
       }
+      
+      // 啟動測量模式
+      this.toggleMeasureMode(sourceViewerId);
       
       // 生成唯一的剖面視圖ID
       const profileViewerId = `viewer-profile-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -527,7 +534,9 @@ export const useAnalysisStore = defineStore('analysis', {
             props: {
               ...viewer.props,
               isActive: false,
-              linkedProfileViewerId: profileViewerId  // 添加綁定關係
+              linkedProfileViewerId: profileViewerId,  // 添加綁定關係
+              profileMeasureMode: true,  // 啟用測量模式
+              targetProfileViewer: { id: profileViewerId }  // 設置目標 ProfileViewer
             }
           };
         }
@@ -589,6 +598,13 @@ export const useAnalysisStore = defineStore('analysis', {
       if (viewer.component === 'ProfileViewer' && viewer.props.sourceViewerId) {
         // 如果是 ProfileViewer，則需要解除與 ImageViewer 的綁定
         this.updateImageViewerBinding(viewer.props.sourceViewerId, null);
+        
+        // 如果當前正在測量，且測量的是關聯的 ImageViewer，則關閉測量模式
+        if (this.measureMode && this.currentMeasuringViewerId === viewer.props.sourceViewerId) {
+          this.measureMode = false;
+          this.currentMeasuringViewerId = '';
+          this.updateImageViewerMeasureMode(viewer.props.sourceViewerId, false);
+        }
       }
       
       // 檢查要移除的是否為 ImageViewer
@@ -648,6 +664,12 @@ export const useAnalysisStore = defineStore('analysis', {
           }
         }
         
+        // 如果正在測量模式，關閉測量模式
+        if (this.measureMode && (this.currentMeasuringViewerId === viewerId)) {
+          this.measureMode = false;
+          this.currentMeasuringViewerId = '';
+        }
+        
         return;
       }
       
@@ -675,6 +697,12 @@ export const useAnalysisStore = defineStore('analysis', {
         } else {
           this.activeViewerId = '';
         }
+      }
+      
+      // 如果正在測量模式，關閉測量模式
+      if (this.measureMode && this.currentMeasuringViewerId === viewerId) {
+        this.measureMode = false;
+        this.currentMeasuringViewerId = '';
       }
     }
   }
