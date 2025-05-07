@@ -45,25 +45,24 @@
     </div>
     
     <!-- 標籤頁內容區域 -->
-    <div class="flex-grow overflow-hidden">
+    <div class="flex-grow overflow-auto">
       <!-- 活動標籤頁內容 -->
-      <div v-if="activeTab" class="h-full">
-        <template v-for="group in activeTab.viewerGroups" :key="group.id">
+      <div v-if="activeTab" class="p-4">
+        <!-- 如果有視圖群組，則顯示 ViewerContainer -->
+        <div v-if="activeTab.viewerGroups && activeTab.viewerGroups.length > 0">
+          <!-- 只使用第一個視圖群組 (方案二) -->
           <ViewerContainer
-            :id="group.id"
-            :title="group.title"
-            :viewers="group.viewers"
-            :layout="group.layout"
-            :is-active="isGroupActive(group.id)"
-            :group-height="group.height || 400"
+            :id="activeTab.viewerGroups[0].id"
+            :title="activeTab.viewerGroups[0].title"
+            :viewers="activeTab.viewerGroups[0].viewers"
+            :is-active="true"
             @activate="activateGroup"
             @viewer-removed="handleViewerRemoved"
           />
-        </template>
+        </div>
         
         <!-- 無內容提示 -->
-        <div v-if="!activeTab.viewerGroups || activeTab.viewerGroups.length === 0" 
-             class="h-full flex items-center justify-center bg-gray-50">
+        <div v-else class="h-full flex items-center justify-center bg-gray-50">
           <div class="text-center p-8">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -101,7 +100,6 @@ export default defineComponent({
   },
   setup() {
     const spmDataStore = useSpmDataStore();
-    // 獲取 analysisStore 實例
     const analysisStore = useAnalysisStore();
     
     // 從 store 獲取狀態
@@ -123,6 +121,8 @@ export default defineComponent({
     // 添加新標籤頁
     const addNewTab = () => {
       const newTabId = `tab-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const newGroupId = `group-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
       spmDataStore.addNewTab({
         id: newTabId,
         title: '新標籤頁',
@@ -131,15 +131,17 @@ export default defineComponent({
         sourcePath: '',
         colormap: 'Oranges',
         zScale: 1.0,
-        viewerGroups: []
+        viewerGroups: [{
+          id: newGroupId,
+          title: '數據視圖',
+          viewers: [], // 初始為空
+          layout: 'horizontal'
+        }]
       });
+      
       spmDataStore.setActiveAnalysisTab(newTabId);
       analysisStore.setActiveTab(newTabId);
-    };
-    
-    // 檢查群組是否活動
-    const isGroupActive = (groupId: string) => {
-      return analysisStore.activeGroupId === groupId;
+      analysisStore.setActiveGroup(newGroupId);
     };
     
     // 激活群組
@@ -147,64 +149,10 @@ export default defineComponent({
       analysisStore.setActiveGroup(groupId);
     };
     
-    // 處理視圖移除 - 使用直接調用的方式
+    // 處理視圖移除
     const handleViewerRemoved = (data: { groupId: string, viewerIndex: number, viewerId: string }) => {
       console.log("移除視圖:", data.viewerId);
-      
-      // 使用直接的函數調用，而不是通過 Store 調用
-      removeViewerDirectly(data.viewerId);
-    };
-    
-    // 直接實現視圖移除邏輯，不依賴 Store 的方法
-    const removeViewerDirectly = (viewerId: string) => {
-      console.log("直接執行移除視圖:", viewerId);
-      
-      // 獲取視圖位置
-      const location = spmDataStore.getViewerLocation(viewerId);
-      if (!location) return;
-      
-      const { tabId, groupId, viewerIndex } = location;
-      const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
-      
-      if (!tab || !tab.viewerGroups) return;
-      
-      const groupIndex = tab.viewerGroups.findIndex(g => g.id === groupId);
-      if (groupIndex === -1) return;
-      
-      const group = tab.viewerGroups[groupIndex];
-      
-      // 如果是群組中的最後一個視圖，直接移除整個群組
-      if (group.viewers.length === 1) {
-        const updatedGroups = tab.viewerGroups.filter(g => g.id !== groupId);
-        spmDataStore.updateAnalysisTabData(tabId, {
-          viewerGroups: updatedGroups
-        });
-        
-        // 更新活動群組和視圖ID
-        if (analysisStore.activeGroupId === groupId) {
-          analysisStore.activeGroupId = updatedGroups.length > 0 ? updatedGroups[0].id : '';
-          analysisStore.activeViewerId = '';
-        }
-      } else {
-        // 否則只移除該視圖
-        const updatedViewers = [...group.viewers];
-        updatedViewers.splice(viewerIndex, 1);
-        
-        const updatedGroups = [...tab.viewerGroups];
-        updatedGroups[groupIndex] = {
-          ...group,
-          viewers: updatedViewers
-        };
-        
-        spmDataStore.updateAnalysisTabData(tabId, {
-          viewerGroups: updatedGroups
-        });
-        
-        // 更新活動視圖ID
-        if (analysisStore.activeViewerId === viewerId) {
-          analysisStore.activeViewerId = updatedViewers.length > 0 ? updatedViewers[0].id : '';
-        }
-      }
+      analysisStore.removeViewer(data.viewerId);
     };
     
     return {
@@ -214,35 +162,9 @@ export default defineComponent({
       switchTab,
       closeTab,
       addNewTab,
-      isGroupActive,
       activateGroup,
       handleViewerRemoved
     };
   }
 });
 </script>
-
-<style scoped>
-/* 自定義滾動條 */
-.overflow-x-auto {
-  scrollbar-width: thin;
-  scrollbar-color: #ddd #f1f1f1;
-}
-
-.overflow-x-auto::-webkit-scrollbar {
-  height: 6px;
-}
-
-.overflow-x-auto::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.overflow-x-auto::-webkit-scrollbar-thumb {
-  background: #ddd;
-  border-radius: 3px;
-}
-
-.overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background: #ccc;
-}
-</style>
