@@ -2,7 +2,7 @@
 <template>
   <div class="image-viewer h-full flex flex-col bg-white rounded-lg overflow-hidden"
        :class="{ 'ring-2 ring-primary': isActive }"
-       >
+       @click="handleClick">
     <!-- 控制欄 -->
     <div class="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
       <h3 class="text-sm font-medium text-gray-700 truncate">{{ title || 'Image Viewer' }}</h3>
@@ -233,10 +233,9 @@ export default defineComponent({
     };
     
     // 處理點擊事件
-    // const handleClick = () => {
-    //   console.log('ImageViewer 點擊');
-    //   emit('click');
-    // };
+    const handleClick = () => {
+      emit('click');
+    };
     
     // 禁用Plotly默認交互
     const disablePlotlyInteractions = () => {
@@ -380,7 +379,7 @@ export default defineComponent({
       // 準備布局
       const layout = {
         title: '',
-        margin: { l: 50, r: 100, b: 70, t: 30 },
+        margin: { l: 50, r: 150, b: 65, t: 25 },
         xaxis: {
           title: `X (${props.physUnit})`,
           constrain: 'domain',
@@ -494,7 +493,7 @@ export default defineComponent({
       lineStart,
       lineEnd,
       mouseMovePos,
-      // handleClick,
+      handleClick,
       formatNumber
     };
   }

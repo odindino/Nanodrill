@@ -39,11 +39,11 @@
         <div 
           :class="[
             'viewer-slot relative transition-all',
+            layout === 'horizontal' 
+              ? `w-[${getViewerWidth(index)}%] h-full` 
+              : `h-[${getViewerHeight(index)}%] w-full`,
             'overflow-hidden'
           ]"
-          :style="layout === 'horizontal' 
-            ? { width: viewers.length === 1 ? '50%' : `${getViewerWidth(index)}%`, height: '100%' } 
-            : { height: viewers.length === 1 ? '50%' : `${getViewerHeight(index)}%`, width: '100%' }"
           @click.stop="activateViewer(index)"
         >
           <component 
@@ -140,39 +140,31 @@ export default defineComponent({
       const sizes: number[] = [];
       const count = props.viewers.length;
       
-      if (count === 0) return [];
+      if (count === 0) return;
       
       // 平均分配大小
-      const size = Math.floor(100 / count);
-      for (let i = 0; i < count - 1; i++) {
+      const size = 100 / count;
+      for (let i = 0; i < count; i++) {
         sizes.push(size);
       }
       
-      // 最後一個元素取剩餘寬度，確保總和為 100%
-      sizes.push(100 - size * (count - 1));
-      
       viewerSizes.value = sizes;
-      return sizes;
     };
     
     // 獲取視圖寬度
     const getViewerWidth = (index: number) => {
-      if (viewerSizes.value.length <= index || index < 0) {
-        // 如果尺寸數組未初始化或索引超出範圍，初始化並返回對應的值
-        const sizes = initViewerSizes();
-        return sizes[index] || 50;
+      if (viewerSizes.value.length <= index) {
+        initViewerSizes();
       }
-      return viewerSizes.value[index];
+      return viewerSizes.value[index] || 100;
     };
-
+    
     // 獲取視圖高度
     const getViewerHeight = (index: number) => {
-      if (viewerSizes.value.length <= index || index < 0) {
-        // 如果尺寸數組未初始化或索引超出範圍，初始化並返回對應的值
-        const sizes = initViewerSizes();
-        return sizes[index] || 50;
+      if (viewerSizes.value.length <= index) {
+        initViewerSizes();
       }
-      return viewerSizes.value[index];
+      return viewerSizes.value[index] || 100;
     };
     
     // 啟用容器
@@ -184,14 +176,8 @@ export default defineComponent({
     const activateViewer = (index: number) => {
       if (index < 0 || index >= props.viewers.length) return;
       
-      const viewerId = props.viewers[index].id;
-      console.log('嘗試激活視圖:', viewerId);
-      
-      // 直接設置狀態
-      analysisStore.$state.activeViewerId = viewerId;
-      
-      // 添加確認
-      console.log('直接訪問狀態:', analysisStore.$state.activeViewerId);
+      // 設置活動視圖
+      analysisStore.setActiveViewer(props.viewers[index].id);
       
       // 更新視圖的 isActive 屬性
       updateViewersActiveState(index);
