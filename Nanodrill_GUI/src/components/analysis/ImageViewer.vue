@@ -33,9 +33,13 @@
       </div>
       
       <!-- Plotly 圖表容器 -->
-      <div v-else-if="imageRawData" 
-           ref="plotlyContainer" 
-           class="w-full h-full">
+      <div v-if="imageRawData" 
+          ref="plotlyContainer" 
+          class="w-full h-full"
+          :class="{'profile-measure-mode': profileMeasureMode}"
+          @click="handlePlotClick"
+          @mousedown.stop
+          @mouseup.stop>
       </div>
       
       <!-- 無圖像數據提示 -->
@@ -175,7 +179,7 @@ export default defineComponent({
     },
     // 目標剖面視圖
     targetProfileViewer: {
-      type: Object as PropType<TargetProfileViewer | null>,
+      type: Object as PropType<{ id: string } | null>,
       default: null
     }
   },
@@ -190,11 +194,6 @@ export default defineComponent({
     const formatNumber = (value: number) => {
       if (value === undefined || value === null) return 'N/A';
       return value.toFixed(2);
-    };
-    
-    // 處理點擊事件
-    const handleClick = () => {
-      emit('click');
     };
 
     // 添加關閉視圖的方法
@@ -226,8 +225,13 @@ export default defineComponent({
     
     
     
-    // 獲取物理座標
-    const getPhysicalCoordinates = (point: Point, plotlyRect: DOMRect) => {
+    /**
+     * 獲取物理座標
+     * @param point 點擊點相對於容器的坐標
+     * @param plotlyRect 容器的 DOMRect
+     * @returns 物理坐標
+     */
+    const getPhysicalCoordinates = (point: { x: number, y: number }, plotlyRect: DOMRect) => {
       const { width, height, xRange, yRange } = props.dimensions;
       
       // 計算點在圖像上的相對位置
@@ -323,6 +327,25 @@ export default defineComponent({
       Plotly.newPlot(plotlyContainer.value, data, layout, config);
       plotlyInstance = plotlyContainer.value;
       
+      // 如果在測量模式下，禁用 Plotly 的默認交互
+      if (props.profileMeasureMode) {
+        Plotly.relayout(plotlyContainer.value, {
+          'dragmode': false,
+          'hovermode': false,
+          'clickmode': 'none'
+        });
+      }
+      
+      // 添加 Plotly 事件監聽，覆蓋默認行為
+      if (plotlyInstance) {
+        plotlyInstance.on('plotly_click', function(data) {
+          if (props.profileMeasureMode) {
+            // 阻止默認行為
+            return false;
+          }
+        });
+      }
+
     };
     
     // 更新 Plotly 圖表
@@ -334,6 +357,164 @@ export default defineComponent({
         'z': [props.imageRawData],
         'colorscale': props.colormap || 'Oranges'
       });
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      // 確保 event 是有效的
+      if (event) {
+        event.stopPropagation();
+      }
+      
+      // 只有在非測量模式下才發出點擊事件
+      if (!props.profileMeasureMode) {
+        emit('click');
+      }
+    };
+
+    // 測量點處理
+    const measurePoints = ref<Point[]>([]);
+
+    // 處理圖表點擊
+    const handlePlotClick = (event: MouseEvent) => {
+      // 確保 event 是有效的
+      if (event) {
+        event.stopPropagation();
+      }
+      
+      // 如果不在測量模式或沒有 Plotly 容器，直接返回
+      if (!props.profileMeasureMode || !plotlyContainer.value) {
+        return;
+      }
+      
+      // 獲取點擊位置相對於 Plotly 容器的坐標
+      const rect = plotlyContainer.value.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      
+      // 計算物理坐標
+      const physCoords = getPhysicalCoordinates({x, y}, rect);
+      
+      // 在 Plotly 上標記點
+      markPointOnPlot(physCoords);
+      
+      // 保存測量點
+      measurePoints.value.push({
+        x: physCoords.physicalX,
+        y: physCoords.physicalY
+      });
+      
+      // 如果已經有兩個點，則計算並繪製剖面線
+      if (measurePoints.value.length === 2) {
+        drawProfileLine();
+        // 發送測量完成事件
+        emitMeasureCompleted();
+        // 清空測量點，準備下一次測量
+        measurePoints.value = [];
+      }
+    };
+
+    /**
+     * 在 Plotly 圖表上標記點
+     * @param coords 物理坐標
+     */
+    const markPointOnPlot = (coords: { physicalX: number, physicalY: number }) => {
+      if (!plotlyInstance) return;
+      
+      // 創建標記數據
+      const pointData = {
+        x: [coords.physicalX],
+        y: [coords.physicalY],
+        mode: 'markers',
+        type: 'scatter',
+        marker: {
+          size: 10,
+          color: 'red',
+          symbol: 'circle'
+        },
+        showlegend: false,
+        hoverinfo: 'none'
+      };
+      
+      // 更新 Plotly 圖表，添加標記
+      Plotly.addTraces(plotlyInstance, pointData);
+    };
+
+    /**
+     * 繪製兩點之間的剖面線
+     */
+    const drawProfileLine = () => {
+      if (!plotlyInstance || measurePoints.value.length !== 2) return;
+      
+      const [start, end] = measurePoints.value;
+      
+      // 創建線數據
+      const lineData = {
+        x: [start.x, end.x],
+        y: [start.y, end.y],
+        mode: 'lines',
+        type: 'scatter',
+        line: {
+          color: 'red',
+          width: 2,
+          dash: 'solid'
+        },
+        showlegend: false,
+        hoverinfo: 'none'
+      };
+      
+      // 更新 Plotly 圖表，添加線
+      Plotly.addTraces(plotlyInstance, lineData);
+    };
+
+    /**
+     * 發送測量完成事件
+     */
+    const emitMeasureCompleted = () => {
+      if (measurePoints.value.length !== 2) return;
+      
+      const [start, end] = measurePoints.value;
+      
+      // 獲取源圖像數據
+      const sourceData = {
+        imageRawData: props.imageRawData,
+        dimensions: props.dimensions
+      };
+      
+      // 計算開始和結束點的像素坐標
+      const startPixel = getPixelCoordinates(start);
+      const endPixel = getPixelCoordinates(end);
+      
+      // 發送測量完成事件，包含所需信息
+      emit('measure-completed', {
+        sourceViewerId: props.id,
+        startPoint: [startPixel.x, startPixel.y],
+        endPoint: [endPixel.x, endPixel.y],
+        sourceData,
+        targetProfileViewer: props.targetProfileViewer
+      });
+      
+      // 當測量完成後，關閉測量模式
+      // 這可能需要通過 store 來處理
+      // 或者發送一個事件通知父組件
+    };
+
+    /**
+     * 獲取像素坐標
+     * @param physPoint 物理坐標點
+     * @returns 像素坐標
+     */
+    const getPixelCoordinates = (physPoint: { x: number, y: number }) => {
+      const { width, height, xRange, yRange } = props.dimensions;
+      
+      // 計算相對位置
+      const relX = physPoint.x / xRange;
+      const relY = physPoint.y / yRange;
+      
+      // 計算像素坐標
+      const pixelX = Math.floor(relX * width);
+      const pixelY = Math.floor((1 - relY) * height); // Y軸原點在左上角，需要翻轉
+      
+      return { x: pixelX, y: pixelY };
     };
     
     // 監視 imageRawData 變化
@@ -366,7 +547,8 @@ export default defineComponent({
       plotlyContainer,
       handleClick,
       closeViewer,
-      formatNumber
+      formatNumber,
+      handlePlotClick,
     };
   }
 });

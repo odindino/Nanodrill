@@ -87,7 +87,11 @@ export default defineComponent({
     const plotlyContainer = ref<HTMLElement | null>(null);
     
     // 處理點擊事件
-    const handleClick = () => {
+    const handleClick = (event: MouseEvent) => {
+      // 確保 event 是有效的
+      if (event) {
+        event.stopPropagation();
+      }
       emit('click');
     };
     

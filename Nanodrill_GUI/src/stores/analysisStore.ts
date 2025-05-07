@@ -33,6 +33,7 @@ export const useAnalysisStore = defineStore('analysis', {
     // 測量模式
     measureMode: false,
     currentMeasuringViewerId: '', // 添加：當前正在測量的ViewerId
+    preserveActiveViewerId: '',
     
     // 活動視圖信息
     activeTabId: '',
@@ -292,7 +293,12 @@ export const useAnalysisStore = defineStore('analysis', {
      * 設置活動視圖
      */
     setActiveViewer(viewerId: string) {
-      this.activeViewerId = viewerId;
+      // 如果在測量模式下且有指定要保持的活動視圖，則使用保持的活動視圖
+      if (this.measureMode && this.preserveActiveViewerId) {
+        this.activeViewerId = this.preserveActiveViewerId;
+      } else {
+        this.activeViewerId = viewerId;
+      }
     },
     
     /**
@@ -343,7 +349,7 @@ export const useAnalysisStore = defineStore('analysis', {
     /**
      * 切換測量模式
      */
-    toggleMeasureMode(viewerId: string) {
+    toggleMeasureMode(viewerId: string, keepActiveViewerId?: string) {
       // 如果已經在測量其他視圖，先關閉該視圖的測量模式
       if (this.measureMode && this.currentMeasuringViewerId && this.currentMeasuringViewerId !== viewerId) {
         this.updateImageViewerMeasureMode(this.currentMeasuringViewerId, false);
@@ -353,8 +359,16 @@ export const useAnalysisStore = defineStore('analysis', {
       this.measureMode = !this.measureMode;
       this.currentMeasuringViewerId = this.measureMode ? viewerId : '';
       
+      // 保存要保持活動的視圖 ID
+      this.preserveActiveViewerId = keepActiveViewerId || '';
+      
       // 更新視圖的測量模式狀態
       this.updateImageViewerMeasureMode(viewerId, this.measureMode);
+      
+      // 如果提供了要保持的活動視圖 ID，則確保其保持活動
+      if (keepActiveViewerId) {
+        this.activeViewerId = keepActiveViewerId;
+      }
     },
     
     /**
@@ -447,7 +461,9 @@ export const useAnalysisStore = defineStore('analysis', {
         ...viewer,
         props: {
           ...viewer.props,
-          linkedProfileViewerId: profileViewerId
+          linkedProfileViewerId: profileViewerId,
+          profileMeasureMode: profileViewerId ? viewer.props.profileMeasureMode : false,
+          targetProfileViewer: profileViewerId ? viewer.props.targetProfileViewer : null
         }
       };
       
@@ -462,6 +478,9 @@ export const useAnalysisStore = defineStore('analysis', {
       spmDataStore.updateAnalysisTabData(tabId, {
         viewerGroups: updatedGroups
       });
+
+      console.log(`已更新 ImageViewer ${imageViewerId} 的綁定: ${profileViewerId}`);
+
     },
 
     /**

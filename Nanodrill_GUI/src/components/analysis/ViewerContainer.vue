@@ -111,8 +111,15 @@ export default defineComponent({
     const activateViewer = (index: number) => {
       if (index < 0 || index >= props.viewers.length) return;
       
+      const viewer = props.viewers[index];
+      
+      // 如果當前視圖是 ImageViewer 且處於剖面測量模式，則不切換活動視圖
+      if (viewer.component === 'ImageViewer' && viewer.props.profileMeasureMode) {
+        return;
+      }
+      
       // 設置活動視圖
-      analysisStore.setActiveViewer(props.viewers[index].id);
+      analysisStore.setActiveViewer(viewer.id);
       
       // 更新視圖的 isActive 屬性
       updateViewersActiveState(index);

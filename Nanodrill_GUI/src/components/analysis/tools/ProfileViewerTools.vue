@@ -9,18 +9,18 @@
         <span class="font-medium">來源影像:</span> {{ sourceViewerTitle }}
       </div>
       
-      <!-- 添加線性剖面測量按鈕 -->
-      <div class="mt-3">
+      <!-- 線性剖面測量按鈕 -->
+      <div class="mt-3 space-y-2">
         <button 
-          @click="measureNewProfile"
+          @click="startLineProfileMeasurement"
           class="w-full py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-          :disabled="isSourceViewerMeasuring"
+          :class="{ 'bg-primary-100 border-primary-300': isSourceViewerMeasuring }"
         >
-          線性剖面測量
+          {{ isSourceViewerMeasuring ? '正在測量中...' : '線性剖面測量' }}
         </button>
         
-        <div v-if="isSourceViewerMeasuring" class="mt-2 text-xs text-blue-600">
-          請在影像上點擊設置測量點
+        <div v-if="isSourceViewerMeasuring" class="p-2 text-xs bg-blue-50 text-blue-600 rounded border border-blue-200">
+          請在影像上點擊設置測量點。點擊後將自動繪製剖面線。
         </div>
       </div>
     </div>
@@ -67,7 +67,7 @@ export default defineComponent({
     const isSourceViewerMeasuring = computed(() => {
       if (!sourceViewerId.value) return false;
       
-      // 檢查源影像的測量模式狀態
+      // 獲取最新的源影像狀態
       const location = spmDataStore.getViewerLocation(sourceViewerId.value);
       if (!location) return false;
       
@@ -82,20 +82,22 @@ export default defineComponent({
       return sourceViewer.props.profileMeasureMode === true;
     });
     
-    // 開始新的剖面測量
-    const measureNewProfile = () => {
-      // 檢查是否有源影像
+    // 開始線性剖面測量
+    const startLineProfileMeasurement = () => {
       if (!sourceViewerId.value) return;
       
-      // 直接使用 store 啟動測量模式
-      analysisStore.toggleMeasureMode(sourceViewerId.value);
+      // 切換源影像的測量模式
+      analysisStore.toggleMeasureMode(sourceViewerId.value, props.viewer.id);
+      
+      // 確保當前活動視圖保持為 ProfileViewer
+      analysisStore.setActiveViewer(props.viewer.id);
     };
     
     return {
       hasSourceViewer,
       sourceViewerTitle,
       isSourceViewerMeasuring,
-      measureNewProfile
+      startLineProfileMeasurement
     };
   }
 });
