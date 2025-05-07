@@ -144,11 +144,63 @@
               建立線性剖面
             </button>
           </div>
+          
+          <!-- 已關聯的剖面圖列表 -->
+          <div v-if="linkedProfiles && linkedProfiles.length > 0">
+            <label class="text-xs text-gray-500 block mb-1">關聯的剖面圖</label>
+            <div class="space-y-1">
+              <div 
+                v-for="profile in linkedProfiles" 
+                :key="profile.id"
+                class="flex items-center justify-between py-1 px-2 bg-blue-50 rounded text-xs border border-blue-100"
+              >
+                <span class="text-blue-700 truncate">{{ profile.title }}</span>
+                <button 
+                  @click="activateProfile(profile.id)"
+                  class="p-1 rounded hover:bg-blue-100 text-blue-600"
+                  title="切換到此剖面圖"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
         
         <!-- 剖面視圖工具 -->
         <div v-else-if="activeViewer.component === 'ProfileViewer'" class="space-y-4">
           <h4 class="font-medium text-sm border-b pb-2 mb-2">剖面設定</h4>
+          
+          <!-- 關聯的圖像來源 -->
+          <div v-if="activeViewer.props && activeViewer.props.sourceViewerTitle" class="mb-3">
+            <div class="text-xs text-gray-500 mb-1">來源圖像</div>
+            <div class="flex items-center justify-between py-1.5 px-3 bg-blue-50 rounded text-sm border border-blue-100">
+              <span class="text-blue-700 truncate">{{ activeViewer.props.sourceViewerTitle }}</span>
+              <button 
+                @click="activateSourceViewer(activeViewer.props.sourceViewerId)"
+                class="p-1 rounded hover:bg-blue-100 text-blue-600"
+                title="切換到來源圖像"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <!-- 測量新剖面按鈕 -->
+          <div v-if="activeViewer.props && activeViewer.props.sourceViewerId">
+            <button 
+              @click="measureNewProfile"
+              class="w-full py-2 px-3 text-sm font-medium rounded bg-blue-100 text-blue-700 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
+            >
+              在來源圖像上測量新剖面
+            </button>
+          </div>
           
           <!-- 將最小值歸零選項 -->
           <div class="flex items-center">
@@ -235,6 +287,13 @@ import { defineComponent, ref, computed} from 'vue';
 import type { PropType } from 'vue';
 import type { Viewer } from './ViewerGroup.vue';
 
+// 新增鏈接檔案接口
+interface LinkedProfile {
+  id: string;
+  title: string;
+  viewerId: string;
+}
+
 export default defineComponent({
   name: 'ToolsPanel',
   props: {
@@ -249,6 +308,11 @@ export default defineComponent({
     activeTabZScale: {
       type: Number,
       default: 1.0
+    },
+    // 新增屬性：關聯到當前ImageViewer的Profile列表
+    linkedProfiles: {
+      type: Array as PropType<LinkedProfile[]>,
+      default: () => []
     }
   },
   emits: [
@@ -257,7 +321,10 @@ export default defineComponent({
     'apply-flatten', 
     'adjust-tilt', 
     'create-line-profile', 
-    'update-profile'
+    'update-profile',
+    'activate-profile',
+    'activate-source-viewer',
+    'measure-new-profile'
   ],
   setup(props, { emit }) {
     const showToolsPanel = ref(true);
@@ -306,6 +373,35 @@ export default defineComponent({
       emit('update-profile', profileSettings.value);
     };
     
+    // 激活特定的Profile視圖
+    const activateProfile = (profileId: string) => {
+      console.log('工具面板呼叫激活Profile:', profileId);
+      emit('activate-profile', profileId);
+    };
+    
+    // 激活源視圖
+    const activateSourceViewer = (sourceViewerId: string) => {
+      console.log('工具面板呼叫激活源視圖:', sourceViewerId);
+      emit('activate-source-viewer', sourceViewerId);
+    };
+    
+    // 測量新剖面
+    const measureNewProfile = () => {
+      console.log('工具面板呼叫測量新剖面');
+      
+      // 檢查是否有源视图ID
+      if (props.activeViewer && 
+          props.activeViewer.component === 'ProfileViewer' && 
+          props.activeViewer.props && 
+          props.activeViewer.props.sourceViewerId) {
+        
+        emit('measure-new-profile', {
+          sourceViewerId: props.activeViewer.props.sourceViewerId,
+          profileViewerId: props.activeViewer.id
+        });
+      }
+    };
+    
     return {
       showToolsPanel,
       fineTuneTilt,
@@ -315,7 +411,10 @@ export default defineComponent({
       applyFlatten,
       adjustTilt,
       handleCreateLineProfile,
-      updateProfile
+      updateProfile,
+      activateProfile,
+      activateSourceViewer,
+      measureNewProfile
     };
   }
 });

@@ -8,19 +8,6 @@
       <h3 class="text-sm font-medium text-gray-700 truncate">{{ title || 'Image Viewer' }}</h3>
       
       <div class="flex space-x-2">
-        <!-- 線性剖面按鈕 -->
-        <button 
-          v-if="allowProfile && !hideControls" 
-          @click.stop="toggleLineProfile"
-          class="p-1 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
-          :class="{ 'bg-blue-100 text-blue-600': lineProfileEnabled }"
-          title="線性剖面"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-          </svg>
-        </button>
-        
         <!-- 關閉按鈕 -->
         <button 
           v-if="allowClose" 
@@ -51,17 +38,18 @@
         <div v-if="imageRawData" 
              ref="plotlyContainer" 
              class="w-full h-full"
-             @mousedown="handleMouseDown"
-             @mousemove="handleMouseMove"
-             @mouseup="handleMouseUp"></div>
+             @click="handlePlotlyClick"
+             @mousemove="handleMouseMove">
+        </div>
         
         <!-- 線性剖面繪製線 -->
-        <svg v-if="lineProfileEnabled" class="absolute top-0 left-0 w-full h-full pointer-events-none">
-          <line v-if="isDrawingLine || (lineStart && lineEnd)"
-                :x1="lineStart?.x || 0"
-                :y1="lineStart?.y || 0"
-                :x2="isDrawingLine ? mouseMovePos.x : (lineEnd?.x || 0)"
-                :y2="isDrawingLine ? mouseMovePos.y : (lineEnd?.y || 0)"
+        <svg v-if="profileMeasureMode" class="absolute top-0 left-0 w-full h-full pointer-events-none">
+          <!-- 繪製起點和終點之間的線段 -->
+          <line v-if="lineStart && (isDrawingLine || lineEnd)"
+                :x1="lineStart.x"
+                :y1="lineStart.y"
+                :x2="isDrawingLine ? mouseMovePos.x : lineEnd.x"
+                :y2="isDrawingLine ? mouseMovePos.y : lineEnd.y"
                 stroke="#ff6b6b"
                 stroke-width="2"
                 stroke-dasharray="5,5" />
@@ -74,7 +62,7 @@
                   fill="#ff6b6b" />
           
           <!-- 終點圓點 -->
-          <circle v-if="!isDrawingLine && lineEnd"
+          <circle v-if="lineEnd"
                   :cx="lineEnd.x"
                   :cy="lineEnd.y"
                   r="4"
@@ -90,6 +78,13 @@
             <span class="text-sm text-gray-500">尚未載入圖像</span>
           </div>
         </div>
+      </div>
+      
+      <!-- 測量模式提示 -->
+      <div v-if="profileMeasureMode" class="absolute top-2 left-2 right-2 bg-blue-100 text-blue-800 p-2 rounded-md z-10 text-sm">
+        <div v-if="!lineStart" class="font-medium">請點擊設置起點</div>
+        <div v-else-if="isDrawingLine" class="font-medium">請點擊設置終點</div>
+        <div v-else class="font-medium">已完成測量！</div>
       </div>
     </div>
     
@@ -142,9 +137,20 @@ interface Point {
   y: number;
 }
 
+// 定義目標剖面視圖接口
+interface TargetProfileViewer {
+  id: string;
+  groupId: string;
+  viewerIndex: number;
+}
+
 export default defineComponent({
   name: 'ImageViewer',
   props: {
+    id: {
+      type: String,
+      default: ''
+    },
     imageData: {
       type: String,
       default: ''
@@ -181,10 +187,6 @@ export default defineComponent({
       type: Object as PropType<Dimensions>,
       default: () => ({ width: 0, height: 0, xRange: 0, yRange: 0 })
     },
-    allowProfile: {
-      type: Boolean,
-      default: true
-    },
     allowClose: {
       type: Boolean,
       default: true
@@ -204,9 +206,19 @@ export default defineComponent({
     showStats: {
       type: Boolean,
       default: true
+    },
+    // 是否處於剖面測量模式
+    profileMeasureMode: {
+      type: Boolean,
+      default: false
+    },
+    // 目標剖面視圖
+    targetProfileViewer: {
+      type: Object as PropType<TargetProfileViewer | null>,
+      default: null
     }
   },
-  emits: ['update:colormap', 'update:zScale', 'line-profile', 'close', 'click'],
+  emits: ['update:colormap', 'update:zScale', 'line-profile', 'close', 'click', 'measure-completed'],
   setup(props, { emit }) {
     // 圖像容器引用
     const imageContainer = ref<HTMLElement | null>(null);
@@ -214,7 +226,6 @@ export default defineComponent({
     let plotlyInstance: any = null;
     
     // 線性剖面相關狀態
-    const lineProfileEnabled = ref(false);
     const isDrawingLine = ref(false);
     const lineStart = ref<Point | null>(null);
     const lineEnd = ref<Point | null>(null);
@@ -231,56 +242,61 @@ export default defineComponent({
       emit('click');
     };
     
-    // 切換線性剖面功能
-    const toggleLineProfile = () => {
-      lineProfileEnabled.value = !lineProfileEnabled.value;
-      
-      // 如果禁用了線性剖面，重置相關狀態
-      if (!lineProfileEnabled.value) {
-        isDrawingLine.value = false;
-        lineStart.value = null;
-        lineEnd.value = null;
+    // 禁用Plotly默認交互
+    const disablePlotlyInteractions = () => {
+      if (plotlyInstance) {
+        Plotly.relayout(plotlyInstance, {
+          'dragmode': false,
+          'displayModeBar': false,
+          'scrollZoom': false
+        });
       }
     };
     
-    // 處理滑鼠按下事件
-    const handleMouseDown = (event: MouseEvent) => {
-      if (!lineProfileEnabled.value) return;
+    // 啟用Plotly默認交互
+    const enablePlotlyInteractions = () => {
+      if (plotlyInstance) {
+        Plotly.relayout(plotlyInstance, {
+          'dragmode': 'zoom',
+          'displayModeBar': true,
+          'scrollZoom': true
+        });
+      }
+    };
+    
+    // 處理Plotly點擊事件 - 簡化版本
+    const handlePlotlyClick = (event: MouseEvent) => {
+      // 如果不在測量模式，則不處理
+      if (!props.profileMeasureMode) return;
       
-      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      // 獲取點擊的座標
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
       
-      // 設置起點並開始繪製
-      lineStart.value = { x, y };
-      isDrawingLine.value = true;
+      if (!lineStart.value) {
+        // 設置起點
+        lineStart.value = { x, y };
+        isDrawingLine.value = true;
+      } else if (isDrawingLine.value) {
+        // 設置終點
+        lineEnd.value = { x, y };
+        isDrawingLine.value = false;
+        
+        // 處理剖面數據
+        sendProfileData();
+      }
     };
     
-    // 處理滑鼠移動事件
+    // 處理鼠標移動事件
     const handleMouseMove = (event: MouseEvent) => {
-      if (!isDrawingLine.value) return;
+      if (!props.profileMeasureMode || !isDrawingLine.value) return;
       
-      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
       mouseMovePos.value = {
         x: event.clientX - rect.left,
         y: event.clientY - rect.top
       };
-    };
-    
-    // 處理滑鼠放開事件
-    const handleMouseUp = (event: MouseEvent) => {
-      if (!isDrawingLine.value) return;
-      
-      const rect = (event.target as HTMLElement).getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      
-      // 設置終點
-      lineEnd.value = { x, y };
-      isDrawingLine.value = false;
-      
-      // 發送剖面數據
-      sendProfileData();
     };
     
     // 獲取物理座標
@@ -322,13 +338,26 @@ export default defineComponent({
         endPoint: [endCoord.pixelY, endCoord.pixelX],
         physicalStart: [startCoord.physicalX, startCoord.physicalY],
         physicalEnd: [endCoord.physicalX, endCoord.physicalY],
-        unit: props.physUnit
+        unit: props.physUnit,
+        sourceViewerId: props.id,
+        sourceViewerTitle: props.title,
+        sourceData: {
+          imageRawData: props.imageRawData,
+          dimensions: props.dimensions,
+          title: props.title,
+          physUnit: props.physUnit
+        },
+        targetProfileViewer: props.targetProfileViewer
       });
       
-      // 繪製完成後，禁用線性剖面模式
-      lineProfileEnabled.value = false;
-      lineStart.value = null;
-      lineEnd.value = null;
+      // 通知測量完成
+      emit('measure-completed');
+      
+      // 短暫延遲後重置線
+      setTimeout(() => {
+        lineStart.value = null;
+        lineEnd.value = null;
+      }, 1000);
     };
     
     // 創建 Plotly 圖表
@@ -347,22 +376,22 @@ export default defineComponent({
         x: x,
         y: y,
         type: 'heatmap',
-        colorscale: props.colormap || 'Oranges', // 確保使用 Oranges 為預設
+        colorscale: props.colormap || 'Oranges',
         showscale: true,
         zauto: true
       }];
       
-      // 準備布局 - 參考第二張截圖的風格
+      // 準備布局
       const layout = {
         title: '',
-        margin: { l: 50, r: 150, b: 65, t: 25 }, // 增加右側邊距以容納色彩條
+        margin: { l: 50, r: 150, b: 65, t: 25 },
         xaxis: {
           title: `X (${props.physUnit})`,
           constrain: 'domain',
           showgrid: true,
           gridcolor: '#e5e5e5',
           gridwidth: 1,
-          linewidth: 2, // 增加軸線粗細
+          linewidth: 2,
           linecolor: 'black'
         },
         yaxis: {
@@ -372,34 +401,21 @@ export default defineComponent({
           showgrid: true,
           gridcolor: '#e5e5e5',
           gridwidth: 1,
-          linewidth: 2, // 增加軸線粗細
+          linewidth: 2,
           linecolor: 'black'
         },
         coloraxis: {
           colorbar: {
             title: `Height (${props.physUnit})`,
             titleside: 'right',
-            outlinewidth: 1, // 添加色彩條邊框
+            outlinewidth: 1,
             outlinecolor: 'black',
-            thickness: 20 // 增加色彩條的寬度
+            thickness: 20
           }
         },
         plot_bgcolor: 'white',
         paper_bgcolor: 'white',
-        autosize: true,
-        modebar: {
-          bgcolor: 'white',
-          color: 'black',
-          activecolor: 'blue',
-          orientation: 'v'
-        },
-        'toImageButtonOptions': {
-          'format': 'svg', // one of png, svg, jpeg, webp
-          'filename': 'custom_image',
-          'height': 500,
-          'width': 700,
-          'scale': 1 // Multiply title/legend/axis/canvas sizes by this factor
-        },
+        autosize: true
       };
       
       // 設置配置
@@ -417,8 +433,6 @@ export default defineComponent({
       
       // 保存圖表實例用於更新
       plotlyInstance = plotlyContainer.value;
-      console.log('Creating Plotly chart with data:', props.imageRawData);
-      console.log('Container element:', plotlyContainer.value);
     };
     
     // 更新 Plotly 圖表
@@ -428,7 +442,7 @@ export default defineComponent({
       // 更新數據和顏色映射
       Plotly.update(plotlyInstance, {
         'z': [props.imageRawData],
-        'colorscale': props.colormap || 'Oranges' // 確保正確應用顏色映射
+        'colorscale': props.colormap || 'Oranges'
       });
     };
     
@@ -452,7 +466,6 @@ export default defineComponent({
     
     // 監視 zScale 變化
     watch(() => props.zScale, () => {
-      // 這裡我們需要通過修改 coloraxis 來調整顯示範圍
       if (plotlyInstance) {
         const zMin = props.stats ? props.stats.min : null;
         const zMax = props.stats ? props.stats.max : null;
@@ -473,6 +486,22 @@ export default defineComponent({
       }
     });
     
+    // 監視測量模式變化
+    watch(() => props.profileMeasureMode, (newMode) => {
+      if (newMode) {
+        // 進入測量模式，禁用Plotly交互
+        disablePlotlyInteractions();
+        
+        // 重置狀態
+        lineStart.value = null;
+        lineEnd.value = null;
+        isDrawingLine.value = false;
+      } else {
+        // 退出測量模式，啟用Plotly交互
+        enablePlotlyInteractions();
+      }
+    });
+    
     // 組件掛載時
     onMounted(() => {
       if (props.imageRawData) {
@@ -483,17 +512,14 @@ export default defineComponent({
     return {
       imageContainer,
       plotlyContainer,
-      lineProfileEnabled,
       isDrawingLine,
       lineStart,
       lineEnd,
       mouseMovePos,
       formatNumber,
       handleClick,
-      toggleLineProfile,
-      handleMouseDown,
-      handleMouseMove,
-      handleMouseUp
+      handlePlotlyClick,
+      handleMouseMove
     };
   }
 });
@@ -501,8 +527,12 @@ export default defineComponent({
 
 <style scoped>
 /* 自定義樣式 */
-.image-viewer.active {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
-  outline-offset: -2px;
+.image-viewer {
+  position: relative;
+}
+
+/* 測量模式下的鼠標樣式 */
+.profile-measure-mode {
+  cursor: crosshair !important;
 }
 </style>
