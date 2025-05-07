@@ -236,6 +236,11 @@ export default defineComponent({
     const handleClick = () => {
       emit('click');
     };
+
+    // 添加關閉視圖的方法
+    const closeViewer = () => {
+      emit('close');
+    };
     
     // 禁用Plotly默認交互
     const disablePlotlyInteractions = () => {
@@ -494,6 +499,7 @@ export default defineComponent({
       lineEnd,
       mouseMovePos,
       handleClick,
+      closeViewer,
       formatNumber
     };
   }

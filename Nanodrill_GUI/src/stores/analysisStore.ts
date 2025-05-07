@@ -351,6 +351,228 @@ export const useAnalysisStore = defineStore('analysis', {
      */
     clearError() {
       this.errorMessage = '';
-    }
+    },
+
+    // 創建新的視圖群組
+    createNewViewerGroup(tabId: string, title: string, viewers: any[] = []) {
+      const spmDataStore = useSpmDataStore();
+      
+      // 生成唯一的群組ID
+      const groupId = `group-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      // 創建新的視圖群組 - 即使只有一個視圖也設置為 50% 寬度
+      const newGroup = {
+        id: groupId,
+        title: title || 'New Group',
+        viewers: viewers || [],
+        layout: 'horizontal',
+        // 添加初始視圖大小設置
+        viewerSizes: viewers.map(() => 50) // 每個視圖都是 50%
+      };
+      
+      // 更新標籤頁
+      const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
+      if (tab) {
+        const updatedGroups = [...(tab.viewerGroups || []), newGroup];
+        
+        spmDataStore.updateAnalysisTabData(tabId, {
+          viewerGroups: updatedGroups
+        });
+        
+        // 更新活動群組ID
+        this.activeGroupId = groupId;
+        
+        // 如果有視圖，設置第一個視圖為活動視圖
+        if (newGroup.viewers.length > 0) {
+          this.activeViewerId = newGroup.viewers[0].id;
+        }
+      }
+      
+      return groupId;
+    },
+
+    // 將視圖添加到群組或創建新群組
+    addViewerToGroupOrCreate(tabId: string, groupId: string | null, viewer: any) {
+      const spmDataStore = useSpmDataStore();
+      
+      // 如果沒有指定群組ID，或者找不到群組，則創建新群組
+      if (!groupId) {
+        return this.createNewViewerGroup(tabId, `${viewer.props.title || 'Group'}`, [viewer]);
+      }
+      
+      // 找到指定標籤頁和群組
+      const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
+      if (!tab || !tab.viewerGroups) {
+        return this.createNewViewerGroup(tabId, `${viewer.props.title || 'Group'}`, [viewer]);
+      }
+      
+      const groupIndex = tab.viewerGroups.findIndex(g => g.id === groupId);
+      
+      if (groupIndex === -1) {
+        // 如果找不到群組，創建新群組
+        return this.createNewViewerGroup(tabId, `${viewer.props.title || 'Group'}`, [viewer]);
+      }
+      
+      const group = tab.viewerGroups[groupIndex];
+      
+      // 檢查群組是否已有兩個視圖
+      if (group.viewers.length >= 2) {
+        // 如果已經有兩個視圖，創建新的群組
+        return this.createNewViewerGroup(tabId, `${viewer.props.title || 'Group'}`, [viewer]);
+      } else {
+        // 將視圖添加到現有群組
+        const updatedGroups = [...tab.viewerGroups];
+        updatedGroups[groupIndex] = {
+          ...group,
+          viewers: [...group.viewers, viewer]
+        };
+        
+        // 更新標籤頁
+        spmDataStore.updateAnalysisTabData(tabId, {
+          viewerGroups: updatedGroups
+        });
+        
+        // 更新活動視圖ID
+        this.activeViewerId = viewer.id;
+        return groupId;
+      }
+    },
+
+    // 創建線性剖面視圖
+    async createLineProfile(sourceViewerId: string, targetProfileViewer: any = null) {
+      // 首先找到源視圖所在的標籤頁和群組
+      const spmDataStore = useSpmDataStore();
+      const location = spmDataStore.getViewerLocation(sourceViewerId);
+      
+      if (!location) return;
+      
+      const { tabId, groupId } = location;
+      const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
+      if (!tab || !tab.viewerGroups) return;
+      
+      const sourceGroup = tab.viewerGroups.find(g => g.id === groupId);
+      if (!sourceGroup) return;
+      
+      const sourceViewer = sourceGroup.viewers.find(v => v.id === sourceViewerId);
+      if (!sourceViewer) return;
+      
+      // 生成唯一的剖面視圖ID
+      const profileViewerId = `viewer-profile-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      // 創建新的剖面視圖
+      const profileViewer = {
+        id: profileViewerId,
+        component: 'ProfileViewer',
+        props: {
+          id: profileViewerId,
+          title: `剖面圖 - ${sourceViewer.props.title || 'Image'}`,
+          physUnit: sourceViewer.props.physUnit || 'nm',
+          sourceViewerId: sourceViewerId,
+          sourceViewerTitle: sourceViewer.props.title || 'Image',
+          isActive: true,
+          allowClose: true
+        }
+      };
+      
+      // 如果有目標群組ID，添加到指定群組
+      if (targetProfileViewer && targetProfileViewer.groupId) {
+        // 更新現有的 ProfileViewer
+        const viewerLocation = spmDataStore.getViewerLocation(targetProfileViewer.id);
+        if (viewerLocation) {
+          const targetTab = spmDataStore.analysisTabs.find(t => t.id === viewerLocation.tabId);
+          if (targetTab && targetTab.viewerGroups) {
+            const targetGroup = targetTab.viewerGroups.find(g => g.id === viewerLocation.groupId);
+            if (targetGroup) {
+              const updatedViewers = [...targetGroup.viewers];
+              updatedViewers[viewerLocation.viewerIndex] = {
+                ...updatedViewers[viewerLocation.viewerIndex],
+                props: {
+                  ...updatedViewers[viewerLocation.viewerIndex].props,
+                  sourceViewerId: sourceViewerId,
+                  sourceViewerTitle: sourceViewer.props.title || 'Image'
+                }
+              };
+              
+              const updatedGroups = [...targetTab.viewerGroups];
+              updatedGroups[targetTab.viewerGroups.indexOf(targetGroup)] = {
+                ...targetGroup,
+                viewers: updatedViewers
+              };
+              
+              spmDataStore.updateAnalysisTabData(targetTab.id, {
+                viewerGroups: updatedGroups
+              });
+              
+              // 更新活動視圖
+              this.activeViewerId = targetProfileViewer.id;
+              return targetProfileViewer.id;
+            }
+          }
+        }
+      }
+      
+      // 否則，創建新群組或添加到現有群組
+      this.addViewerToGroupOrCreate(tabId, null, profileViewer);
+      
+      // 啟用測量模式
+      this.toggleMeasureMode();
+      
+      // 更新所有圖像視圖的測量模式
+      this.updateImageViewerMeasureMode(sourceViewerId, profileViewerId);
+      
+      return profileViewerId;
+    },
+
+    // 更新特定圖像視圖的測量模式
+    updateImageViewerMeasureMode(sourceViewerId: string, profileViewerId: string) {
+      const spmDataStore = useSpmDataStore();
+      
+      for (const tab of spmDataStore.analysisTabs) {
+        if (tab.viewerGroups) {
+          const updatedGroups = [...tab.viewerGroups];
+          let groupsUpdated = false;
+          
+          // 更新每個群組中的 ImageViewer
+          for (let i = 0; i < updatedGroups.length; i++) {
+            const group = updatedGroups[i];
+            let viewersUpdated = false;
+            
+            const updatedViewers = group.viewers.map(viewer => {
+              if (viewer.id === sourceViewerId) {
+                viewersUpdated = true;
+                return {
+                  ...viewer,
+                  props: {
+                    ...viewer.props,
+                    profileMeasureMode: true,
+                    targetProfileViewer: {
+                      id: profileViewerId,
+                      groupId: group.id
+                    }
+                  }
+                };
+              }
+              return viewer;
+            });
+            
+            if (viewersUpdated) {
+              groupsUpdated = true;
+              updatedGroups[i] = {
+                ...group,
+                viewers: updatedViewers
+              };
+            }
+          }
+          
+          // 如果有更新，更新標籤頁
+          if (groupsUpdated) {
+            spmDataStore.updateAnalysisTabData(tab.id, {
+              viewerGroups: updatedGroups
+            });
+          }
+        }
+      }
+    },
   }
+  
 });

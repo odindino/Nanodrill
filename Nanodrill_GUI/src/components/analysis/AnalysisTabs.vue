@@ -57,6 +57,7 @@
             :is-active="isGroupActive(group.id)"
             :group-height="group.height || 400"
             @activate="activateGroup"
+            @viewer-removed="handleViewerRemoved"
           />
         </template>
         

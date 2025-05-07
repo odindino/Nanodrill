@@ -33,17 +33,14 @@
       :class="layout === 'horizontal' ? 'flex-row' : 'flex-col'"
       :style="{ height: `${groupHeight}px` }"
     >
-      <!-- 遍歷渲染所有視圖 -->
-      <template v-for="(viewer, index) in viewers" :key="viewer.id">
+      <!-- 遍歷渲染所有視圖 - 最多只顯示兩個 -->
+      <template v-for="(viewer, index) in limitedViewers" :key="viewer.id">
         <!-- 視圖 -->
         <div 
-          :class="[
-            'viewer-slot relative transition-all',
-            layout === 'horizontal' 
-              ? `w-[${getViewerWidth(index)}%] h-full` 
-              : `h-[${getViewerHeight(index)}%] w-full`,
-            'overflow-hidden'
-          ]"
+          class="viewer-slot relative transition-all overflow-hidden"
+          :style="layout === 'horizontal' 
+            ? { width: `${getViewerWidth(index)}%`, height: '100%' } 
+            : { height: `${getViewerHeight(index)}%`, width: '100%' }"
           @click.stop="activateViewer(index)"
         >
           <component 
@@ -51,12 +48,13 @@
             v-bind="viewer.props"
             :isActive="isViewerActive(viewer.id)"
             @click.stop="activateViewer(index)"
+            @close="removeViewer(index)"
           />
         </div>
         
         <!-- 分隔線 (如果不是最後一個視圖) -->
         <div 
-          v-if="index < viewers.length - 1"
+          v-if="index < limitedViewers.length - 1"
           :class="[
             'resizer bg-gray-200 hover:bg-blue-300 transition-colors',
             layout === 'horizontal' ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'
@@ -82,7 +80,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
+import { defineComponent, ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import type { PropType } from 'vue';
 import { useAnalysisStore } from '../../stores/analysisStore';
 import { useSpmDataStore } from '../../stores/spmDataStore';
@@ -116,13 +114,26 @@ export default defineComponent({
       default: 500
     }
   },
-  emits: ['activate'],
+  emits: ['activate', 'viewer-removed'],
   setup(props, { emit }) {
     const analysisStore = useAnalysisStore();
     const spmDataStore = useSpmDataStore();
     
-    // 視圖大小
+    // 視圖大小 - 初始化為平均分配（50%/50%）
     const viewerSizes = ref<number[]>([]);
+    
+    // 限制最多兩個視圖
+    const limitedViewers = computed(() => {
+      return props.viewers.slice(0, 2);
+    });
+
+    // 監視 viewers 屬性變化
+    watch(() => props.viewers, (newViewers) => {
+      if (newViewers.length > 2) {
+        console.warn('ViewerContainer 不應該包含超過兩個視圖，請創建新的 ViewerContainer');
+      }
+      initViewerSizes();
+    });
     
     // 調整大小相關
     const isResizing = ref(false);
@@ -131,24 +142,14 @@ export default defineComponent({
     const startSizes = ref<number[]>([]);
     
     // 初始化視圖大小
-    onMounted(() => {
-      initViewerSizes();
-    });
-    
-    // 初始化視圖大小
     const initViewerSizes = () => {
-      const sizes: number[] = [];
-      const count = props.viewers.length;
+      const count = Math.min(props.viewers.length, 2); // 限制最多兩個視圖
       
       if (count === 0) return;
       
       // 平均分配大小
       const size = 100 / count;
-      for (let i = 0; i < count; i++) {
-        sizes.push(size);
-      }
-      
-      viewerSizes.value = sizes;
+      viewerSizes.value = Array(count).fill(50);
     };
     
     // 獲取視圖寬度
@@ -156,7 +157,10 @@ export default defineComponent({
       if (viewerSizes.value.length <= index) {
         initViewerSizes();
       }
-      return viewerSizes.value[index] || 100;
+      
+      // 即使只有一個視圖，也只給它 50% 的空間
+      // 這樣第一個視圖就不會佔用 100% 的空間
+      return viewerSizes.value[index] || 50;
     };
     
     // 獲取視圖高度
@@ -164,7 +168,9 @@ export default defineComponent({
       if (viewerSizes.value.length <= index) {
         initViewerSizes();
       }
-      return viewerSizes.value[index] || 100;
+      
+      // 同樣，即使只有一個視圖，也只給它 50% 的高度
+      return viewerSizes.value[index] || 50;
     };
     
     // 啟用容器
@@ -172,12 +178,22 @@ export default defineComponent({
       emit('activate', props.id);
     };
     
+    // 移除視圖
+    const removeViewer = (index: number) => {
+      if (index < 0 || index >= limitedViewers.value.length) return;
+      
+      const viewerId = limitedViewers.value[index].id;
+      
+      // 發送事件通知父組件處理移除邏輯
+      emit('viewer-removed', { groupId: props.id, viewerIndex: index, viewerId });
+    };
+    
     // 啟用視圖
     const activateViewer = (index: number) => {
-      if (index < 0 || index >= props.viewers.length) return;
+      if (index < 0 || index >= limitedViewers.value.length) return;
       
       // 設置活動視圖
-      analysisStore.setActiveViewer(props.viewers[index].id);
+      analysisStore.setActiveViewer(limitedViewers.value[index].id);
       
       // 更新視圖的 isActive 屬性
       updateViewersActiveState(index);
@@ -326,6 +342,11 @@ export default defineComponent({
       document.removeEventListener('mouseup', stopResize);
     };
     
+    // 組件掛載時初始化視圖大小
+    onMounted(() => {
+      initViewerSizes();
+    });
+    
     // 組件卸載前清理
     onBeforeUnmount(() => {
       document.removeEventListener('mousemove', handleResize);
@@ -333,11 +354,13 @@ export default defineComponent({
     });
     
     return {
+      limitedViewers,
       viewerSizes,
       getViewerWidth,
       getViewerHeight,
       activateContainer,
       activateViewer,
+      removeViewer,
       isViewerActive,
       toggleLayout,
       startResize

@@ -35,6 +35,8 @@
         <component 
           :is="getToolsComponent(activeViewer.component)"
           :viewer="activeViewer"
+          @create-line-profile="createLineProfile"
+          @measure-new-profile="measureNewProfile"
         />
       </template>
       
@@ -109,13 +111,29 @@ export default defineComponent({
       }
     };
     
+    // 建立線性剖面
+    const createLineProfile = (data: any) => {
+      // 調用 analysisStore 中的方法創建線性剖面
+      analysisStore.createLineProfile(data.viewerId);
+    };
     
+    // 測量新的剖面
+    const measureNewProfile = (data: any) => {
+      // 調用 analysisStore 中的方法測量新的剖面
+      if (data.profileViewerId && data.sourceViewerId) {
+        analysisStore.createLineProfile(data.sourceViewerId, {
+          id: data.profileViewerId
+        });
+      }
+    };
     
     return {
       showToolsPanel,
       activeViewer,
       toggleToolsPanel,
       getToolsComponent,
+      createLineProfile,
+      measureNewProfile
     };
   }
 });
