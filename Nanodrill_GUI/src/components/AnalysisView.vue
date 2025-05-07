@@ -14,28 +14,20 @@
     <div v-else class="h-full flex relative">
       <!-- 左側面板區域 -->
       <div class="h-full flex flex-col">
-        <!-- 檔案選擇器面板 - 使用新組件 -->
+        <!-- 檔案選擇器面板 -->
         <FileSelectorPanel 
           :active-tab="activeTab" 
-          :is-loading="isTabLoading"
+          :is-loading="isLoading"
           @toggle-selector="showFileSelector = $event"
           @load-file="loadSelectedFile"
         />
         
-        <!-- 工具列面板 - 使用新組件 -->
+        <!-- 工具列面板 -->
         <ToolsPanel
           :active-viewer="activeViewer"
-          :active-tab-colormap="activeTabColormap"
-          :active-tab-z-scale="activeTabZScale"
           :linked-profiles="getLinkedProfiles()"
           @toggle-panel="showToolsPanel = $event"
-          @update-settings="updateActiveTabSettings"
-          @apply-flatten="applyFlatten"
-          @adjust-tilt="adjustTilt"
           @create-line-profile="createLineProfile"
-          @update-profile="updateProfile"
-          @activate-profile="activateProfileViewer"
-          @activate-source-viewer="activateSourceViewer"
           @measure-new-profile="handleMeasureNewProfile"
         />
       </div>
@@ -49,14 +41,13 @@
           @tab-closed="closeTab"
           @tab-added="addTab"
           @tab-updated="updateTab"
-          @group-to-tab="handleGroupToTab"
-          @create-line-profile="createLineProfile"
           @viewer-activated="handleViewerActivated"
+          @create-line-profile="createLineProfile"
         />
       </div>
 
       <!-- 載入中顯示 -->
-      <div v-if="isTabLoading" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 z-50">
+      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 z-50">
         <div class="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
           <div class="w-12 h-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
           <p class="text-gray-600">正在載入資料...</p>
@@ -64,7 +55,7 @@
       </div>
 
       <!-- 錯誤提示 -->
-      <div v-if="tabLoadError" 
+      <div v-if="errorMessage" 
            class="absolute top-4 right-4 max-w-md p-4 bg-red-50 border-l-4 border-red-400 text-red-700 z-50 rounded shadow-md">
         <div class="flex">
           <div class="flex-shrink-0">
@@ -73,10 +64,10 @@
             </svg>
           </div>
           <div class="ml-3">
-            <p class="text-sm">{{ tabLoadError }}</p>
+            <p class="text-sm">{{ errorMessage }}</p>
           </div>
           <div class="ml-auto pl-3">
-            <button @click="tabLoadError = ''" class="text-red-400 hover:text-red-500 focus:outline-none">
+            <button @click="clearError" class="text-red-400 hover:text-red-500 focus:outline-none">
               <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
               </svg>
@@ -91,6 +82,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, watch, onMounted } from 'vue';
 import { useSpmDataStore } from '../stores/spmDataStore';
+import { useAnalysisStore } from '../stores/analysisStore';
 import AnalysisTabs from './analysis/AnalysisTabs.vue';
 import FileSelectorPanel from './analysis/FileSelectorPanel.vue';
 import ToolsPanel from './analysis/ToolsPanel.vue';
@@ -111,10 +103,7 @@ export default defineComponent({
   },
   setup() {
     const spmDataStore = useSpmDataStore();
-    
-    // 全局狀態
-    const isTabLoading = ref(false);
-    const tabLoadError = ref('');
+    const analysisStore = useAnalysisStore();
     
     // 側邊面板狀態
     const showFileSelector = ref(true);
@@ -142,15 +131,15 @@ export default defineComponent({
       return group.viewers[activeGroupInfo.value.viewerIndex] || null;
     });
     
-    // 尋找當前活動的視圖群組
-    const findActiveGroup = () => {
-      if (!activeTab.value || !activeTab.value.viewerGroups || !activeGroupInfo.value) return null;
-      return activeTab.value.viewerGroups.find(group => group.id === activeGroupInfo.value?.groupId) || null;
-    };
+    // 從 analysisStore 獲取狀態
+    const isLoading = computed(() => analysisStore.isLoading);
+    const errorMessage = computed(() => analysisStore.errorMessage);
+    const measureMode = computed(() => analysisStore.measureMode);
     
-    // 活動標籤頁設置
-    const activeTabColormap = ref('Oranges');
-    const activeTabZScale = ref(1.0);
+    // 清除錯誤消息
+    const clearError = () => {
+      analysisStore.clearError();
+    };
     
     // 剖面關聯映射
     // key: ImageViewer ID, value: ProfileViewer ID 數組
@@ -185,7 +174,7 @@ export default defineComponent({
       return profiles;
     };
     
-    // 處理視圖啟用 - 新函數
+    // 處理視圖啟用
     const handleViewerActivated = (data: any) => {
       console.log('AnalysisView 收到視圖啟用事件:', data);
       
@@ -204,45 +193,39 @@ export default defineComponent({
     const switchTab = (tabId: string) => {
       spmDataStore.setActiveAnalysisTab(tabId);
       
-      // 更新當前標籤頁的設置
+      // 尋找活動的視圖群組和視圖
       const tab = analysisTabs.value.find(tab => tab.id === tabId);
-      if (tab) {
-        activeTabColormap.value = tab.colormap || 'Oranges';
-        activeTabZScale.value = tab.zScale || 1.0;
-        
-        // 尋找活動的視圖群組和視圖
-        if (tab.viewerGroups && tab.viewerGroups.length > 0) {
-          // 尋找第一個有活動視圖的群組
-          for (const group of tab.viewerGroups) {
-            const activeViewerIndex = group.viewers.findIndex(viewer => viewer.props && viewer.props.isActive);
-            if (activeViewerIndex !== -1) {
-              // 找到活動視圖
-              activeGroupInfo.value = {
-                groupId: group.id,
-                viewerIndex: activeViewerIndex,
-                viewerId: group.viewers[activeViewerIndex].id,
-                viewerComponent: group.viewers[activeViewerIndex].component
-              };
-              break;
-            }
+      if (tab && tab.viewerGroups && tab.viewerGroups.length > 0) {
+        // 尋找第一個有活動視圖的群組
+        for (const group of tab.viewerGroups) {
+          const activeViewerIndex = group.viewers.findIndex(viewer => viewer.props && viewer.props.isActive);
+          if (activeViewerIndex !== -1) {
+            // 找到活動視圖
+            activeGroupInfo.value = {
+              groupId: group.id,
+              viewerIndex: activeViewerIndex,
+              viewerId: group.viewers[activeViewerIndex].id,
+              viewerComponent: group.viewers[activeViewerIndex].component
+            };
+            break;
           }
-          
-          // 如果沒有找到活動視圖，設置第一個群組的第一個視圖為活動
-          if (!activeGroupInfo.value) {
-            const firstGroup = tab.viewerGroups[0];
-            if (firstGroup.viewers.length > 0) {
-              activeGroupInfo.value = {
-                groupId: firstGroup.id,
-                viewerIndex: 0,
-                viewerId: firstGroup.viewers[0].id,
-                viewerComponent: firstGroup.viewers[0].component
-              };
-            }
-          }
-        } else {
-          // 清空活動視圖信息
-          activeGroupInfo.value = null;
         }
+        
+        // 如果沒有找到活動視圖，設置第一個群組的第一個視圖為活動
+        if (!activeGroupInfo.value) {
+          const firstGroup = tab.viewerGroups[0];
+          if (firstGroup.viewers.length > 0) {
+            activeGroupInfo.value = {
+              groupId: firstGroup.id,
+              viewerIndex: 0,
+              viewerId: firstGroup.viewers[0].id,
+              viewerComponent: firstGroup.viewers[0].component
+            };
+          }
+        }
+      } else {
+        // 清空活動視圖信息
+        activeGroupInfo.value = null;
       }
     };
     
@@ -265,16 +248,8 @@ export default defineComponent({
     
     // 更新標籤頁
     const updateTab = ({ id, changes }: { id: string, changes: any }) => {
-      // 實作更新標籤頁的邏輯
       console.log('更新標籤頁:', id, changes);
       spmDataStore.updateAnalysisTabData(id, changes);
-    };
-    
-    // 更新標籤頁設置
-    const updateActiveTabSettings = (settings: any) => {
-      if (!activeTabId.value) return;
-      
-      spmDataStore.updateAnalysisTabData(activeTabId.value, settings);
     };
     
     // 載入選中檔案
@@ -282,154 +257,115 @@ export default defineComponent({
       console.log('loadSelectedFile called with:', selectedFileId, activeTabId);
       if (!selectedFileId || !activeTab.value) return;
       
-      isTabLoading.value = true;
-      tabLoadError.value = '';
+      // 使用 analysisStore 載入文件
+      analysisStore.selectFile(selectedFileId, '');
+      await analysisStore.loadSelectedFile();
       
-      try {
-        // 檢查檔案類型
-        if (selectedFileId.toLowerCase().endsWith('.int')) {
-          console.log('處理INT檔案');
-          // 處理 INT 檔案
-          const response = await window.pywebview.api.analyze_int_file_api(
-            selectedFileId, 
-            activeTab.value.fileId
-          );
+      // 如果載入成功，更新標籤頁
+      if (analysisStore.imageRawData && !errorMessage.value) {
+        try {
+          // 獲取檔案名稱
+          const fileName = selectedFileId.split(/[\/\\]/).pop() || '';
           
-          console.log('API回應:', response);
-          
-          if (response.success) {
-            // 更新標籤頁數據
-            const fileName = selectedFileId.split(/[\/\\]/).pop() || '';
-            
-            // 創建新的視圖群組
-            const groupId = `group-${activeTab.value.id}-${Date.now()}`;
-            const imageViewer = {
+          // 創建新的視圖群組
+          const groupId = `group-${activeTab.value.id}-${Date.now()}`;
+          const imageViewer = {
+            id: `viewer-image-${Date.now()}`,
+            component: 'ImageViewer',
+            props: {
               id: `viewer-image-${Date.now()}`,
-              component: 'ImageViewer',
-              props: {
-                id: `viewer-image-${Date.now()}`,
-                imageData: response.image,
-                imageRawData: response.rawData, // 確保傳遞原始數據
-                title: fileName,
-                imageType: 'topo',
-                physUnit: response.physUnit || 'nm',
-                colormap: activeTab.value.colormap || 'Oranges',
-                zScale: activeTab.value.zScale || 1.0,
-                stats: response.statistics || null,
-                dimensions: response.dimensions || { width: 0, height: 0, xRange: 0, yRange: 0 },
-                isActive: true,
-                profileMeasureMode: false // 默認非測量模式
-              }
+              imageData: analysisStore.imageData,
+              imageRawData: analysisStore.imageRawData,
+              title: fileName,
+              imageType: 'topo',
+              physUnit: analysisStore.physUnit || 'nm',
+              colormap: 'Oranges',
+              zScale: 1.0,
+              stats: null, // 簡化，移除統計數據
+              dimensions: analysisStore.dimensions,
+              isActive: true,
+              profileMeasureMode: false
+            }
+          };
+          
+          // 如果標籤頁尚未有視圖群組，添加一個新的
+          if (!activeTab.value.viewerGroups || activeTab.value.viewerGroups.length === 0) {
+            const viewerGroup = {
+              id: groupId,
+              title: fileName,
+              viewers: [imageViewer],
+              layout: 'horizontal'
             };
             
-            console.log('創建視圖:', imageViewer);
+            spmDataStore.updateAnalysisTabData(activeTabId, {
+              viewerGroups: [viewerGroup]
+            });
             
-            // 如果標籤頁尚未有視圖群組，添加一個新的
-            if (!activeTab.value.viewerGroups || activeTab.value.viewerGroups.length === 0) {
-              console.log('創建新的視圖群組');
-              
-              const viewerGroup = {
-                id: groupId,
-                title: fileName,
-                viewers: [imageViewer],
-                layout: 'horizontal'
-              };
-              
-              console.log('新視圖群組:', viewerGroup);
-              
-              spmDataStore.updateAnalysisTabData(activeTabId, {
-                viewerGroups: [viewerGroup]
-              });
-              
-              // 更新活動視圖信息
-              activeGroupInfo.value = {
-                groupId: groupId,
-                viewerIndex: 0,
-                viewerId: imageViewer.id,
-                viewerComponent: 'ImageViewer'
-              };
-            } else {
-              // 如果已經有視圖群組，添加到第一個群組
-              console.log('添加到現有視圖群組');
-              const updatedGroups = [...activeTab.value.viewerGroups];
-              
-              // 將所有視圖設為非活動
-              updatedGroups[0].viewers = updatedGroups[0].viewers.map(viewer => ({
-                ...viewer,
-                props: {
-                  ...viewer.props,
-                  isActive: false
-                }
-              }));
-              
-              // 添加新視圖
-              updatedGroups[0].viewers.push(imageViewer);
-              
-              spmDataStore.updateAnalysisTabData(activeTabId, {
-                viewerGroups: updatedGroups
-              });
-              
-              // 更新活動視圖信息
-              activeGroupInfo.value = {
-                groupId: updatedGroups[0].id,
-                viewerIndex: updatedGroups[0].viewers.length - 1,
-                viewerId: imageViewer.id,
-                viewerComponent: 'ImageViewer'
-              };
-            }
-            
-            // 更新UI設置
-            activeTabColormap.value = activeTab.value.colormap || 'Oranges';
-            activeTabZScale.value = activeTab.value.zScale || 1.0;
+            // 更新活動視圖信息
+            activeGroupInfo.value = {
+              groupId: groupId,
+              viewerIndex: 0,
+              viewerId: imageViewer.id,
+              viewerComponent: 'ImageViewer'
+            };
           } else {
-            console.error('API回應失敗:', response.error);
-            tabLoadError.value = response.error || '載入檔案時發生錯誤';
+            // 如果已經有視圖群組，添加到第一個群組
+            const updatedGroups = [...activeTab.value.viewerGroups];
+            
+            // 將所有視圖設為非活動
+            updatedGroups[0].viewers = updatedGroups[0].viewers.map(viewer => ({
+              ...viewer,
+              props: {
+                ...viewer.props,
+                isActive: false
+              }
+            }));
+            
+            // 添加新視圖
+            updatedGroups[0].viewers.push(imageViewer);
+            
+            spmDataStore.updateAnalysisTabData(activeTabId, {
+              viewerGroups: updatedGroups
+            });
+            
+            // 更新活動視圖信息
+            activeGroupInfo.value = {
+              groupId: updatedGroups[0].id,
+              viewerIndex: updatedGroups[0].viewers.length - 1,
+              viewerId: imageViewer.id,
+              viewerComponent: 'ImageViewer'
+            };
           }
-        } else {
-          console.error('不支援的檔案類型');
-          tabLoadError.value = '檔案類型不支援';
+        } catch (error) {
+          console.error('更新標籤頁數據時出錯:', error);
         }
-      } catch (error) {
-        console.error('載入檔案錯誤:', error);
-        tabLoadError.value = `載入檔案時發生錯誤: ${error}`;
-      } finally {
-        isTabLoading.value = false;
       }
     };
     
-    // 處理群組轉標籤頁
-    const handleGroupToTab = (groupData: any) => {
-      // 實作群組轉標籤頁的邏輯
-      console.log('群組轉標籤頁:', groupData);
-    };
-    
-    // 創建線性剖面 - 添加到當前視圖群組
-    const createLineProfile = (targetData?: any) => {
+    // 創建線性剖面
+    const createLineProfile = () => {
       if (!activeTab.value) {
         console.error('無活動標籤頁');
         return;
       }
       
-      console.log('創建線性剖面, targetData:', targetData);
-      const activeGroup = findActiveGroup();
-      
+      // 找出當前活動的視圖群組
+      const activeGroup = activeTab.value.viewerGroups.find(group => group.id === activeGroupInfo.value?.groupId);
       if (!activeGroup) {
         console.error('找不到活動視圖群組');
-        tabLoadError.value = '請先選擇或創建一個視圖群組';
         return;
       }
       
       // 找出當前活動的 ImageViewer
-      const sourceViewerIndex = targetData?.viewerIndex || activeGroupInfo.value?.viewerIndex || 0;
+      const sourceViewerIndex = activeGroupInfo.value?.viewerIndex || 0;
       const sourceViewer = activeGroup.viewers[sourceViewerIndex];
       
       if (!sourceViewer || sourceViewer.component !== 'ImageViewer') {
         console.error('找不到有效的源圖像視圖');
-        tabLoadError.value = '請先選擇一個圖像視圖';
         return;
       }
       
-      // 創建新的ProfileViewer，並設置與ImageViewer的關聯
+      // 創建新的 ProfileViewer
       const profileViewerId = `viewer-profile-${Date.now()}`;
       const profileViewer = {
         id: profileViewerId,
@@ -440,17 +376,11 @@ export default defineComponent({
           physUnit: sourceViewer.props.physUnit || 'nm',
           isActive: true,
           showStats: true,
-          initialShiftZero: false,
-          initialAutoScale: true,
-          initialShowPeaks: false,
           isMeasuring: false,
-          // 添加源圖像視圖的引用
           sourceViewerId: sourceViewer.id,
           sourceViewerTitle: sourceViewer.props.title || 'Image'
         }
       };
-      
-      console.log('創建剖面視圖:', profileViewer);
       
       // 將所有視圖設為非活動
       const updatedViewers = activeGroup.viewers.map(viewer => ({
@@ -500,403 +430,10 @@ export default defineComponent({
           currentAssociations.push(newProfileViewerId);
           profileAssociations.value.set(sourceViewerId, currentAssociations);
         }
-        
-        console.log('更新後的視圖群組:', updatedGroups[groupIndex]);
-        console.log('更新後的活動視圖信息:', activeGroupInfo.value);
-        console.log('更新後的關聯映射:', profileAssociations.value);
-      }
-    };
-    
-    // 更新剖面圖
-    const updateProfile = async (settings: any) => {
-      if (!activeViewer.value || activeViewer.value.component !== 'ProfileViewer') return;
-      
-      try {
-        isTabLoading.value = true;
-        
-        // 獲取當前ProfileViewer的profileData
-        const profileData = activeViewer.value.props.profileData;
-        if (!profileData) {
-          console.error('沒有可用的剖面數據');
-          return;
-        }
-        
-        // 調用API更新剖面圖
-        const response = await window.pywebview.api.update_profile(
-          profileData,
-          settings.shiftZero,
-          settings.autoScale,
-          settings.showPeaks,
-          settings.peakSensitivity
-        );
-        
-        if (response.success) {
-          // 找到活動的視圖群組和視圖
-          const activeGroup = findActiveGroup();
-          if (!activeGroup) return;
-          
-          // 獲取當前視圖索引
-          const viewerIndex = activeGroupInfo.value?.viewerIndex || 0;
-          
-          // 更新視圖數據
-          const updatedViewers = [...activeGroup.viewers];
-          updatedViewers[viewerIndex] = {
-            ...updatedViewers[viewerIndex],
-            props: {
-              ...updatedViewers[viewerIndex].props,
-              profileImage: response.profile_image
-            }
-          };
-          
-          // 更新視圖群組
-          const updatedGroups = [...activeTab.value!.viewerGroups];
-          const groupIndex = updatedGroups.findIndex(group => group.id === activeGroup.id);
-          
-          updatedGroups[groupIndex] = {
-            ...activeGroup,
-            viewers: updatedViewers
-          };
-          
-          // 更新標籤頁
-          spmDataStore.updateAnalysisTabData(activeTabId.value, {
-            viewerGroups: updatedGroups
-          });
-        } else {
-          tabLoadError.value = response.error || '更新剖面圖失敗';
-        }
-      } catch (error) {
-        console.error('更新剖面圖錯誤:', error);
-        tabLoadError.value = `更新剖面圖時發生錯誤: ${error}`;
-      } finally {
-        isTabLoading.value = false;
-      }
-    };
-    
-    // 應用平面化
-    const applyFlatten = async (method: string) => {
-      if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
-      
-      try {
-        // 尋找當前活動的視圖
-        const activeGroup = findActiveGroup();
-        if (!activeGroup || !activeTab.value) return;
-        
-        const viewerIndex = activeGroupInfo.value?.viewerIndex;
-        if (viewerIndex === undefined || viewerIndex < 0) return;
-        
-        // 獲取當前視圖的原始數據
-        const imageData = activeGroup.viewers[viewerIndex].props.imageRawData;
-        if (!imageData) {
-          tabLoadError.value = "沒有可用的圖像數據";
-          return;
-        }
-        
-        isTabLoading.value = true;
-        
-        // 調用API進行平面化處理
-        const response = await window.pywebview.api.apply_flatten(
-          imageData, 
-          method, 
-          method === 'polyfit' ? 2 : 1  // 對於多項式方法，使用2階
-        );
-        
-        if (response.success) {
-          // 更新視圖數據
-          const updatedViewers = [...activeGroup.viewers];
-          updatedViewers[viewerIndex] = {
-            ...updatedViewers[viewerIndex],
-            props: {
-              ...updatedViewers[viewerIndex].props,
-              imageRawData: response.processed_data,
-              statistics: response.statistics
-            }
-          };
-          
-          // 更新視圖組
-          const updatedGroups = [...activeTab.value.viewerGroups];
-          const groupIndex = updatedGroups.findIndex(group => group.id === activeGroup.id);
-          
-          updatedGroups[groupIndex] = {
-            ...activeGroup,
-            viewers: updatedViewers
-          };
-          
-          // 更新標籤頁
-          spmDataStore.updateAnalysisTabData(activeTabId.value, {
-            viewerGroups: updatedGroups
-          });
-        } else {
-          tabLoadError.value = response.error || "平面化處理失敗";
-        }
-      } catch (error) {
-        console.error('平面化處理錯誤:', error);
-        tabLoadError.value = `平面化處理時發生錯誤: ${error}`;
-      } finally {
-        isTabLoading.value = false;
-      }
-    };
-    
-    // 調整傾斜
-    const adjustTilt = async ({ direction, fineTune }: { direction: string, fineTune: boolean }) => {
-      if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
-      
-      try {
-        // 尋找當前活動的視圖
-        const activeGroup = findActiveGroup();
-        if (!activeGroup || !activeTab.value) return;
-        
-        const viewerIndex = activeGroupInfo.value?.viewerIndex;
-        if (viewerIndex === undefined || viewerIndex < 0) return;
-        
-        // 獲取當前視圖的原始數據
-        const imageData = activeGroup.viewers[viewerIndex].props.imageRawData;
-        if (!imageData) {
-          tabLoadError.value = "沒有可用的圖像數據";
-          return;
-        }
-        
-        isTabLoading.value = true;
-        
-        // 調用API進行傾斜調整
-        const response = await window.pywebview.api.tilt_image(
-          imageData, 
-          direction,
-          fineTune
-        );
-        
-        if (response.success) {
-          // 更新視圖數據
-          const updatedViewers = [...activeGroup.viewers];
-          updatedViewers[viewerIndex] = {
-            ...updatedViewers[viewerIndex],
-            props: {
-              ...updatedViewers[viewerIndex].props,
-              imageRawData: response.processed_data,
-              statistics: response.statistics
-            }
-          };
-          
-          // 更新視圖組
-          const updatedGroups = [...activeTab.value.viewerGroups];
-          const groupIndex = updatedGroups.findIndex(group => group.id === activeGroup.id);
-          
-          updatedGroups[groupIndex] = {
-            ...activeGroup,
-            viewers: updatedViewers
-          };
-          
-          // 更新標籤頁
-          spmDataStore.updateAnalysisTabData(activeTabId.value, {
-            viewerGroups: updatedGroups
-          });
-        } else {
-          tabLoadError.value = response.error || "傾斜調整失敗";
-        }
-      } catch (error) {
-        console.error('傾斜調整錯誤:', error);
-        tabLoadError.value = `傾斜調整時發生錯誤: ${error}`;
-      } finally {
-        isTabLoading.value = false;
-      }
-    };
-    
-    // 處理 ProfileViewer 中的測量模式切換
-    const handleToggleMeasureMode = async ({ isMeasuring, sourceViewerId, profileViewerId }: any) => {
-      if (!activeTab.value) return;
-      
-      console.log('處理測量模式切換:', isMeasuring, sourceViewerId, profileViewerId);
-      
-      // 找到源視圖和剖面視圖
-      let sourceViewer = null;
-      let sourceViewerGroup = null;
-      let sourceViewerIndex = -1;
-      
-      let profileViewer = null;
-      let profileViewerGroup = null;
-      let profileViewerIndex = -1;
-      
-      // 尋找源視圖和剖面視圖
-      for (const group of activeTab.value.viewerGroups) {
-        // 尋找源視圖
-        const srcIndex = group.viewers.findIndex(v => v.id === sourceViewerId);
-        if (srcIndex !== -1) {
-          sourceViewer = group.viewers[srcIndex];
-          sourceViewerGroup = group;
-          sourceViewerIndex = srcIndex;
-        }
-        
-        // 尋找剖面視圖
-        const profIndex = group.viewers.findIndex(v => v.id === profileViewerId);
-        if (profIndex !== -1) {
-          profileViewer = group.viewers[profIndex];
-          profileViewerGroup = group;
-          profileViewerIndex = profIndex;
-        }
       }
       
-      if (!sourceViewer || !profileViewer) {
-        console.error('找不到源視圖或剖面視圖');
-        tabLoadError.value = '找不到關聯的視圖';
-        return;
-      }
-      
-      // 更新兩個視圖的狀態
-      const updatedGroups = [...activeTab.value.viewerGroups];
-      
-      // 1. 更新源視圖的測量模式
-      const sourceGroupIndex = updatedGroups.indexOf(sourceViewerGroup!);
-      
-      updatedGroups[sourceGroupIndex] = {
-        ...sourceViewerGroup!,
-        viewers: sourceViewerGroup!.viewers.map((viewer, idx) => {
-          if (idx === sourceViewerIndex) {
-            return {
-              ...viewer,
-              props: {
-                ...viewer.props,
-                profileMeasureMode: isMeasuring,
-                // 如果是測量模式，設置目標剖面視圖
-                targetProfileViewer: isMeasuring ? {
-                  id: profileViewerId,
-                  groupId: profileViewerGroup!.id,
-                  viewerIndex: profileViewerIndex
-                } : null
-              }
-            };
-          }
-          return viewer;
-        })
-      };
-      
-      // 2. 更新剖面視圖的測量狀態
-      const profileGroupIndex = updatedGroups.indexOf(profileViewerGroup!);
-      
-      // 如果源視圖和剖面視圖在同一個群組
-      if (sourceGroupIndex === profileGroupIndex) {
-        // 已經更新了整個群組，只需確保剖面視圖的 isMeasuring 狀態正確
-        updatedGroups[sourceGroupIndex].viewers[profileViewerIndex] = {
-          ...updatedGroups[sourceGroupIndex].viewers[profileViewerIndex],
-          props: {
-            ...updatedGroups[sourceGroupIndex].viewers[profileViewerIndex].props,
-            isMeasuring: isMeasuring
-          }
-        };
-      } else {
-        // 源視圖和剖面視圖在不同群組
-        updatedGroups[profileGroupIndex] = {
-          ...profileViewerGroup!,
-          viewers: profileViewerGroup!.viewers.map((viewer, idx) => {
-            if (idx === profileViewerIndex) {
-              return {
-                ...viewer,
-                props: {
-                  ...viewer.props,
-                  isMeasuring: isMeasuring
-                }
-              };
-            }
-            return viewer;
-          })
-        };
-      }
-      
-      // 更新標籤頁
-      spmDataStore.updateAnalysisTabData(activeTabId.value, {
-        viewerGroups: updatedGroups
-      });
-      
-      // 如果啟用測量模式，激活源視圖
-      if (isMeasuring) {
-        // 更新活動視圖信息
-        activeGroupInfo.value = {
-          groupId: sourceViewerGroup!.id,
-          viewerIndex: sourceViewerIndex,
-          viewerId: sourceViewerId,
-          viewerComponent: 'ImageViewer'
-        };
-      }
-    };
-    
-    // 處理測量完成
-    const handleMeasureCompleted = () => {
-      // 找到處於測量模式的源視圖
-      let sourceViewer = null;
-      let sourceViewerGroup = null;
-      let sourceViewerIndex = -1;
-      
-      if (!activeTab.value) return;
-      
-      // 尋找源視圖
-      for (const group of activeTab.value.viewerGroups) {
-        const index = group.viewers.findIndex(v => 
-          v.component === 'ImageViewer' && 
-          v.props && 
-          v.props.profileMeasureMode
-        );
-        
-        if (index !== -1) {
-          sourceViewer = group.viewers[index];
-          sourceViewerGroup = group;
-          sourceViewerIndex = index;
-          break;
-        }
-      }
-      
-      if (!sourceViewer) return;
-      
-      // 更新視圖狀態 - 關閉測量模式
-      const updatedGroups = [...activeTab.value.viewerGroups];
-      const groupIndex = updatedGroups.indexOf(sourceViewerGroup!);
-      
-      updatedGroups[groupIndex] = {
-        ...sourceViewerGroup!,
-        viewers: sourceViewerGroup!.viewers.map((viewer, idx) => {
-          if (idx === sourceViewerIndex) {
-            return {
-              ...viewer,
-              props: {
-                ...viewer.props,
-                profileMeasureMode: false
-              }
-            };
-          }
-          return viewer;
-        })
-      };
-      
-      // 更新目標剖面視圖的測量狀態
-      const targetProfileViewer = sourceViewer.props.targetProfileViewer;
-      if (targetProfileViewer) {
-        // 查找目標剖面視圖
-        for (let i = 0; i < updatedGroups.length; i++) {
-          const group = updatedGroups[i];
-          const viewerIndex = group.viewers.findIndex(v => v.id === targetProfileViewer.id);
-          
-          if (viewerIndex !== -1) {
-            updatedGroups[i] = {
-              ...group,
-              viewers: group.viewers.map((viewer, idx) => {
-                if (idx === viewerIndex) {
-                  return {
-                    ...viewer,
-                    props: {
-                      ...viewer.props,
-                      isMeasuring: false
-                    }
-                  };
-                }
-                return viewer;
-              })
-            };
-            break;
-          }
-        }
-      }
-      
-      // 更新標籤頁
-      spmDataStore.updateAnalysisTabData(activeTabId.value, {
-        viewerGroups: updatedGroups
-      });
+      // 開始測量模式
+      analysisStore.toggleMeasureMode();
     };
     
     // 處理測量新剖面請求
@@ -905,139 +442,37 @@ export default defineComponent({
       
       console.log('處理測量新剖面請求:', data);
       
-      // 這裡直接複用 handleToggleMeasureMode 的邏輯
-      handleToggleMeasureMode({
-        isMeasuring: true,
-        sourceViewerId: data.sourceViewerId,
-        profileViewerId: data.profileViewerId
-      });
-    };
-    
-    // 處理線性剖面數據
-    const handleLineProfileResult = async (data: any) => {
-      if (!activeTab.value) return;
+      // 切換到測量模式
+      analysisStore.toggleMeasureMode();
       
-      console.log('處理線性剖面數據:', data);
-      
-      try {
-        isTabLoading.value = true;
+      // 更新對應的視圖狀態 - 以在 ProfileViewer 中顯示測量模式
+      if (activeTab.value.viewerGroups) {
+        const updatedGroups = [...activeTab.value.viewerGroups];
         
-        // 獲取線性剖面數據
-        const response = await window.pywebview.api.get_line_profile(
-          data.sourceData.imageRawData,
-          data.startPoint,
-          data.endPoint,
-          data.sourceData.dimensions?.xRange || 100,
-          false  // 不偏移到零
-        );
-        
-        if (response.success) {
-          // 尋找目標 ProfileViewer
-          let targetProfileViewer = null;
-          let targetGroupId = '';
-          let targetViewerIndex = -1;
+        // 尋找包含 ImageViewer 的群組
+        for (let i = 0; i < updatedGroups.length; i++) {
+          const group = updatedGroups[i];
+          const viewerIndex = group.viewers.findIndex(v => v.id === data.sourceViewerId);
           
-          // 如果指定了目標 ProfileViewer
-          if (data.targetProfileViewer) {
-            for (const group of activeTab.value.viewerGroups) {
-              const viewerIndex = group.viewers.findIndex(viewer => 
-                viewer.id === data.targetProfileViewer.id
-              );
-              
-              if (viewerIndex !== -1) {
-                targetProfileViewer = group.viewers[viewerIndex];
-                targetGroupId = group.id;
-                targetViewerIndex = viewerIndex;
-                break;
-              }
-            }
-          }
-          
-          if (targetProfileViewer) {
-            // 更新現有的 ProfileViewer
-            const updatedGroups = [...activeTab.value.viewerGroups];
-            const groupIndex = updatedGroups.findIndex(group => group.id === targetGroupId);
-            
-            if (groupIndex !== -1) {
-              const updatedViewers = [...updatedGroups[groupIndex].viewers];
-              
-              updatedViewers[targetViewerIndex] = {
-                ...updatedViewers[targetViewerIndex],
-                props: {
-                  ...updatedViewers[targetViewerIndex].props,
-                  profileData: response.profile_data,
-                  profileImage: response.profile_image,
-                  roughness: response.roughness
+          if (viewerIndex !== -1) {
+            // 更新 ImageViewer 的 profileMeasureMode 屬性
+            updatedGroups[i] = {
+              ...group,
+              viewers: group.viewers.map((viewer, idx) => {
+                if (idx === viewerIndex) {
+                  return {
+                    ...viewer,
+                    props: {
+                      ...viewer.props,
+                      profileMeasureMode: true,
+                      targetProfileViewer: {
+                        id: data.profileViewerId
+                      }
+                    }
+                  };
                 }
-              };
-              
-              updatedGroups[groupIndex] = {
-                ...updatedGroups[groupIndex],
-                viewers: updatedViewers
-              };
-              
-              // 更新標籤頁
-              spmDataStore.updateAnalysisTabData(activeTabId.value, {
-                viewerGroups: updatedGroups
-              });
-              
-              // 延遲後切換到剖面視圖
-              setTimeout(() => {
-                // 激活更新的 ProfileViewer
-                activeGroupInfo.value = {
-                  groupId: targetGroupId,
-                  viewerIndex: targetViewerIndex,
-                  viewerId: targetProfileViewer!.id,
-                  viewerComponent: 'ProfileViewer'
-                };
-              }, 500);
-            }
-          } else {
-            // 應該不會發生，因為現在我們總是有一個目標剖面視圖
-            console.error('沒有目標剖面視圖');
-          }
-        } else {
-          tabLoadError.value = response.error || '獲取線性剖面失敗';
-        }
-      } catch (error) {
-        console.error('線性剖面處理錯誤:', error);
-        tabLoadError.value = `處理線性剖面時發生錯誤: ${error}`;
-      } finally {
-        isTabLoading.value = false;
-        
-        // 處理測量完成
-        handleMeasureCompleted();
-      }
-    };
-    
-    // 激活指定的ProfileViewer
-    const activateProfileViewer = (profileId: string) => {
-      if (!activeTab.value) return;
-      
-      console.log('激活ProfileViewer:', profileId);
-      
-      // 尋找指定的ProfileViewer
-      for (const group of activeTab.value.viewerGroups) {
-        const viewerIndex = group.viewers.findIndex(viewer => viewer.id === profileId);
-        
-        if (viewerIndex !== -1) {
-          // 將所有視圖設為非活動
-          const updatedViewers = group.viewers.map((viewer, idx) => ({
-            ...viewer,
-            props: {
-              ...viewer.props,
-              isActive: idx === viewerIndex
-            }
-          }));
-          
-          // 更新視圖群組
-          const updatedGroups = [...activeTab.value.viewerGroups];
-          const groupIndex = updatedGroups.findIndex(g => g.id === group.id);
-          
-          if (groupIndex !== -1) {
-            updatedGroups[groupIndex] = {
-              ...group,
-              viewers: updatedViewers
+                return viewer;
+              })
             };
             
             // 更新標籤頁
@@ -1045,126 +480,114 @@ export default defineComponent({
               viewerGroups: updatedGroups
             });
             
-            // 更新活動視圖信息
+            // 激活 ImageViewer
             activeGroupInfo.value = {
               groupId: group.id,
               viewerIndex: viewerIndex,
-              viewerId: profileId,
-              viewerComponent: 'ProfileViewer'
-            };
-          }
-          
-          break;
-        }
-      }
-    };
-    
-    // 激活源視圖
-    const activateSourceViewer = (sourceViewerId: string) => {
-      if (!activeTab.value) return;
-      
-      console.log('激活源視圖:', sourceViewerId);
-      
-      // 尋找指定的源視圖
-      for (const group of activeTab.value.viewerGroups) {
-        const viewerIndex = group.viewers.findIndex(viewer => viewer.id === sourceViewerId);
-        
-        if (viewerIndex !== -1) {
-          // 將所有視圖設為非活動
-          const updatedViewers = group.viewers.map((viewer, idx) => ({
-            ...viewer,
-            props: {
-              ...viewer.props,
-              isActive: idx === viewerIndex
-            }
-          }));
-          
-          // 更新視圖群組
-          const updatedGroups = [...activeTab.value.viewerGroups];
-          const groupIndex = updatedGroups.findIndex(g => g.id === group.id);
-          
-          if (groupIndex !== -1) {
-            updatedGroups[groupIndex] = {
-              ...group,
-              viewers: updatedViewers
-            };
-            
-            // 更新標籤頁
-            spmDataStore.updateAnalysisTabData(activeTabId.value, {
-              viewerGroups: updatedGroups
-            });
-            
-            // 更新活動視圖信息
-            activeGroupInfo.value = {
-              groupId: group.id,
-              viewerIndex: viewerIndex,
-              viewerId: sourceViewerId,
+              viewerId: data.sourceViewerId,
               viewerComponent: 'ImageViewer'
             };
+            
+            break;
           }
-          
-          break;
         }
       }
     };
     
-    // 監視標籤頁變化
-    watch(activeTabId, () => {
-      if (activeTab.value) {
-        // 更新當前標籤頁設置
-        activeTabColormap.value = activeTab.value.colormap || 'Oranges';
-        activeTabZScale.value = activeTab.value.zScale || 1.0;
+    // 監聽測量模式變化
+    watch(() => measureMode.value, (newMode) => {
+      // 如果退出測量模式，更新視圖狀態
+      if (!newMode && activeTab.value && activeTab.value.viewerGroups) {
+        const updatedGroups = [...activeTab.value.viewerGroups];
+        
+        // 尋找所有處於測量模式的 ImageViewer，並關閉其測量模式
+        for (let i = 0; i < updatedGroups.length; i++) {
+          const group = updatedGroups[i];
+          let groupUpdated = false;
+          
+          const updatedViewers = group.viewers.map(viewer => {
+            if (viewer.component === 'ImageViewer' && viewer.props.profileMeasureMode) {
+              groupUpdated = true;
+              return {
+                ...viewer,
+                props: {
+                  ...viewer.props,
+                  profileMeasureMode: false,
+                  targetProfileViewer: null
+                }
+              };
+            }
+            return viewer;
+          });
+          
+          if (groupUpdated) {
+            updatedGroups[i] = {
+              ...group,
+              viewers: updatedViewers
+            };
+          }
+        }
+        
+        // 更新標籤頁
+        spmDataStore.updateAnalysisTabData(activeTabId.value, {
+          viewerGroups: updatedGroups
+        });
       }
     });
     
-    // 監視標籤頁列表
-    watch(analysisTabs, (newTabs, oldTabs) => {
-      // 如果添加了新標籤頁
-      if (newTabs.length > oldTabs.length) {
-        const newTab = newTabs.find(tab => !oldTabs.some(oldTab => oldTab.id === tab.id));
+    // 監聽 ImageViewer 發出的線性剖面事件
+    const handleLineProfile = (data: any) => {
+      // 使用 analysisStore 處理線性剖面
+      analysisStore.handleLineProfile(data);
+      
+      // 如果剖面數據生成成功，更新相關的 ProfileViewer
+      watch(() => analysisStore.profileData, (profileData) => {
+        if (!profileData || !activeTab.value) return;
         
-        if (newTab) {
-          // 自動顯示控制面板
-          showFileSelector.value = true;
-          
-          // 自動載入第一個可用的 INT 檔案
-          const intFile = newTab.relatedFiles?.find(f => f.path.toLowerCase().endsWith('.int'));
-          
-          if (intFile) {
-            console.log('新標籤頁自動載入INT檔案:', intFile.path);
-            loadSelectedFile({
-              selectedFileId: intFile.path,
-              activeTabId: newTab.id
-            });
+        // 尋找目標 ProfileViewer 並更新其數據
+        if (data.targetProfileViewer && activeTab.value.viewerGroups) {
+          for (const group of activeTab.value.viewerGroups) {
+            for (let i = 0; i < group.viewers.length; i++) {
+              const viewer = group.viewers[i];
+              if (viewer.id === data.targetProfileViewer.id) {
+                // 更新 ProfileViewer 的數據
+                const updatedGroups = [...activeTab.value.viewerGroups];
+                const groupIndex = updatedGroups.indexOf(group);
+                
+                if (groupIndex !== -1) {
+                  const updatedViewers = [...updatedGroups[groupIndex].viewers];
+                  updatedViewers[i] = {
+                    ...updatedViewers[i],
+                    props: {
+                      ...updatedViewers[i].props,
+                      profileData: profileData,
+                      roughness: analysisStore.roughness
+                    }
+                  };
+                  
+                  updatedGroups[groupIndex] = {
+                    ...updatedGroups[groupIndex],
+                    viewers: updatedViewers
+                  };
+                  
+                  // 更新標籤頁
+                  spmDataStore.updateAnalysisTabData(activeTabId.value, {
+                    viewerGroups: updatedGroups
+                  });
+                  
+                  break;
+                }
+              }
+            }
           }
         }
-      }
-    }, { deep: true });
+      }, { immediate: true });
+    };
     
-    // 初始化
+    // 組件掛載時
     onMounted(() => {
       // 檢查是否有活動標籤頁
       if (activeTab.value) {
-        // 更新當前標籤頁設置
-        activeTabColormap.value = activeTab.value.colormap || 'Oranges';
-        activeTabZScale.value = activeTab.value.zScale || 1.0;
-        
-        // 如果沒有圖像數據，自動顯示控制面板
-        if (!activeTab.value.imageData && !activeTab.value.viewerGroups) {
-          showFileSelector.value = true;
-          
-          // 自動載入第一個 INT 檔案
-          const intFile = activeTab.value.relatedFiles?.find(f => f.path.toLowerCase().endsWith('.int'));
-          
-          if (intFile) {
-            console.log('現有標籤頁自動載入INT檔案:', intFile.path);
-            loadSelectedFile({
-              selectedFileId: intFile.path,
-              activeTabId: activeTab.value.id
-            });
-          }
-        }
-        
         // 尋找活動的視圖群組和視圖
         if (activeTab.value.viewerGroups && activeTab.value.viewerGroups.length > 0) {
           // 尋找第一個有活動視圖的群組
@@ -1200,16 +623,15 @@ export default defineComponent({
     
     return {
       // 狀態
-      isTabLoading,
-      tabLoadError,
       analysisTabs,
       activeTabId,
       activeTab,
       activeViewer,
-      activeTabColormap,
-      activeTabZScale,
+      activeGroupInfo,
       showFileSelector,
       showToolsPanel,
+      isLoading,
+      errorMessage,
       
       // 方法
       switchTab,
@@ -1217,25 +639,13 @@ export default defineComponent({
       addTab,
       updateTab,
       loadSelectedFile,
-      handleGroupToTab,
-      updateActiveTabSettings,
       handleViewerActivated,
       createLineProfile,
-      updateProfile,
-      applyFlatten,
-      adjustTilt,
-      getLinkedProfiles,
-      activateProfileViewer,
-      activateSourceViewer,
       handleMeasureNewProfile,
-      handleLineProfileResult,
-      handleToggleMeasureMode,
-      handleMeasureCompleted
+      handleLineProfile,
+      getLinkedProfiles,
+      clearError
     };
   }
 });
 </script>
-
-<style scoped>
-/* 可以添加一些自定義樣式 */
-</style>

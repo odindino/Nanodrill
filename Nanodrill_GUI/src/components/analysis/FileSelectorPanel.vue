@@ -40,6 +40,7 @@
               class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
               :disabled="!activeTab || !activeTab.relatedFiles || activeTab.relatedFiles.length === 0"
             >
+              <option value="">請選擇檔案</option>
               <option v-for="file in availableFiles" :key="file.path" :value="file.path">
                 {{ file.name }}
               </option>
@@ -57,26 +58,6 @@
             <span v-if="isLoading">載入中...</span>
             <span v-else>載入檔案</span>
           </button>
-          
-          <!-- 檔案資訊區塊 -->
-          <div v-if="activeTab && activeTab.txtContent" class="mt-4 pt-4 border-t border-gray-200">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
-            
-            <div class="bg-white rounded-lg border border-gray-200 overflow-y-auto max-h-80">
-              <!-- 基本參數 -->
-              <div class="p-3">
-                <h4 class="font-medium text-sm border-b pb-1 mb-3">基本參數</h4>
-                
-                <div class="grid grid-cols-1 gap-1.5">
-                  <!-- 參數項目 - 每個參數一行 -->
-                  <div v-for="(value, key) in parametersToDisplay" :key="key" class="info-row flex">
-                    <div class="text-sm font-medium text-gray-700 w-32 flex-shrink-0">{{ key }}:</div>
-                    <div class="text-sm text-gray-900 flex-1">{{ value }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
         <div v-else class="text-center text-gray-500 text-sm pt-4">
           請先選擇一個分析標籤頁
@@ -96,7 +77,6 @@
   import { defineComponent, ref, computed, watch } from 'vue';
   import type { PropType } from 'vue';
   import type { AnalysisTab } from '../../stores/spmDataStore';
-  import type { FileInfo } from '../../stores/spmDataStore';
   
   export default defineComponent({
     name: 'FileSelectorPanel',
@@ -126,20 +106,7 @@
           file.path.toLowerCase().endsWith('.int')
         );
         
-        console.log('可用INT檔案:', intFiles);
         return intFiles;
-      });
-      
-      // 要顯示的參數
-      const parametersToDisplay = computed(() => {
-        if (!props.activeTab || !props.activeTab.parameters) {
-          return {};
-        }
-        
-        const params = { ...props.activeTab.parameters };
-        // 排除檔案描述
-        delete params.FileDescriptions;
-        return params;
       });
       
       // 切換檔案選擇器
@@ -150,13 +117,7 @@
       
       // 載入選中檔案
       const loadSelectedFile = () => {
-        console.log('FileSelectorPanel - loadSelectedFile:', selectedFileId.value);
         if (!selectedFileId.value || !props.activeTab) return;
-        
-        console.log('發送load-file事件:', {
-          selectedFileId: selectedFileId.value,
-          activeTabId: props.activeTab.id
-        });
         
         emit('load-file', {
           selectedFileId: selectedFileId.value,
@@ -165,25 +126,10 @@
       };
       
       // 監視標籤頁變更，自動選擇第一個可用檔案
-      watch(() => props.activeTab, (newTab) => {
-        console.log('標籤頁變更:', newTab?.id);
-        
-        if (newTab && availableFiles.value.length > 0) {
+      watch(() => props.activeTab, () => {
+        if (props.activeTab && availableFiles.value.length > 0) {
           selectedFileId.value = availableFiles.value[0].path;
-          console.log('自動選擇檔案:', selectedFileId.value);
         } else {
-          selectedFileId.value = '';
-        }
-      }, { immediate: true });
-      
-      // 監視可用檔案變更，自動選擇第一個可用檔案
-      watch(availableFiles, (newFiles) => {
-        console.log('可用檔案變更:', newFiles.length);
-        
-        if (newFiles.length > 0 && !selectedFileId.value) {
-          selectedFileId.value = newFiles[0].path;
-          console.log('自動選擇檔案:', selectedFileId.value);
-        } else if (newFiles.length === 0) {
           selectedFileId.value = '';
         }
       }, { immediate: true });
@@ -192,7 +138,6 @@
         showFileSelector,
         selectedFileId,
         availableFiles,
-        parametersToDisplay,
         toggleFileSelector,
         loadSelectedFile
       };
@@ -205,29 +150,5 @@
   .sidebar-panel {
     max-height: calc(50vh - 30px);
     min-height: 200px;
-  }
-  
-  /* 最大高度限制 */
-  .max-h-80 {
-    max-height: 20rem;
-  }
-  
-  /* 滾動條樣式 */
-  .max-h-80::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  .max-h-80::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-  }
-  
-  .max-h-80::-webkit-scrollbar-thumb {
-    background: #ddd;
-    border-radius: 3px;
-  }
-  
-  .max-h-80::-webkit-scrollbar-thumb:hover {
-    background: #ccc;
   }
   </style>

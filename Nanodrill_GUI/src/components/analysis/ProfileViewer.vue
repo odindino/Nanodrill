@@ -177,138 +177,136 @@ export default defineComponent({
     
     // 計算剖面長度
     const profileLength = computed(() => {
-      return props.profileData?.length || 0;
-    });
-    
-    // 格式化數字，保留兩位小數
-    const formatNumber = (value: number) => {
-      if (value === undefined || value === null) return 'N/A';
-      return value.toFixed(2);
-    };
-    
-    // 處理點擊事件
-    const handleClick = () => {
-      emit('click');
-    };
-    
-    // 切換測量模式
-    const toggleMeasureMode = () => {
-      isMeasuring.value = !isMeasuring.value;
-      emit('toggle-measure-mode', {
-        isMeasuring: isMeasuring.value,
-        sourceViewerId: props.sourceViewerId,
-        profileViewerId: props.id
+        return props.profileData?.length || 0;
       });
-    };
-    
-    // 創建默認的剖面數據
-    const createDefaultProfileData = () => {
-      // 創建一個簡單的水平線 (10 個點)
-      const distance = Array.from({ length: 10 }, (_, i) => i);
-      const height = Array.from({ length: 10 }, () => 0);
+      
+      // 格式化數字，保留兩位小數
+      const formatNumber = (value: number) => {
+        if (value === undefined || value === null) return 'N/A';
+        return value.toFixed(2);
+      };
+      
+      // 處理點擊事件
+      const handleClick = () => {
+        emit('click');
+      };
+      
+      // 切換測量模式
+      const toggleMeasureMode = () => {
+        isMeasuring.value = !isMeasuring.value;
+        emit('toggle-measure-mode', {
+          isMeasuring: isMeasuring.value,
+          sourceViewerId: props.sourceViewerId,
+          profileViewerId: props.id
+        });
+      };
+      
+      // 創建默認的剖面數據
+      const createDefaultProfileData = () => {
+        // 創建一個簡單的水平線 (10 個點)
+        const distance = Array.from({ length: 10 }, (_, i) => i);
+        const height = Array.from({ length: 10 }, () => 0);
+        
+        return {
+          distance,
+          height
+        };
+      };
+      
+      // 創建 Plotly 剖面圖
+      const createPlotlyChart = () => {
+        if (!plotlyContainer.value) return;
+        
+        // 決定使用實際數據還是默認數據
+        const { distance, height } = props.profileData || createDefaultProfileData();
+        
+        // 準備數據
+        const data = [{
+          x: distance,
+          y: height,
+          type: 'scatter',
+          mode: 'lines',
+          line: {
+            color: 'royalblue',
+            width: 2
+          },
+          name: 'Height Profile'
+        }];
+        
+        // 設置布局
+        const layout = {
+          title: '',
+          xaxis: {
+            title: `Distance (${props.physUnit})`,
+            showgrid: true,
+            gridcolor: '#e5e5e5',
+            gridwidth: 1,
+            linewidth: 2,
+            linecolor: 'black',
+            zeroline: false
+          },
+          yaxis: {
+            title: `Height (${props.physUnit})`,
+            showgrid: true,
+            gridcolor: '#e5e5e5',
+            gridwidth: 1,
+            linewidth: 2,
+            linecolor: 'black',
+            zeroline: false
+          },
+          margin: { l: 60, r: 30, t: 30, b: 60 },
+          showlegend: false,
+          plot_bgcolor: 'white',
+          paper_bgcolor: 'white',
+          autosize: true
+        };
+        
+        // 設置配置
+        const config = {
+          responsive: true,
+          displayModeBar: true,
+          modeBarButtonsToRemove: [
+            'sendDataToCloud', 'editInChartStudio'
+          ],
+          displaylogo: false
+        };
+        
+        // 創建圖表
+        Plotly.newPlot(plotlyContainer.value, data, layout, config);
+        
+        // 保存圖表實例
+        plotlyInstance = plotlyContainer.value;
+      };
+      
+      // 更新剖面圖
+      const updatePlotlyChart = () => {
+        if (plotlyInstance) {
+          Plotly.purge(plotlyInstance);
+        }
+        createPlotlyChart();
+      };
+      
+      // 監視剖面數據變化
+      watch(() => props.profileData, () => {
+        if (props.profileData) {
+          updatePlotlyChart();
+        }
+      }, { deep: true });
+      
+      // 組件掛載時創建圖表
+      onMounted(() => {
+        createPlotlyChart();
+      });
       
       return {
-        distance,
-        height
+        plotlyContainer,
+        profileLength,
+        isMeasuring,
+        formatNumber,
+        handleClick,
+        toggleMeasureMode
       };
-    };
-    
-    // 創建 Plotly 剖面圖
-    const createPlotlyChart = () => {
-      if (!plotlyContainer.value) return;
-      
-      // 決定使用實際數據還是默認數據
-      const { distance, height } = props.profileData || createDefaultProfileData();
-      
-      console.log('創建剖面圖，數據點數:', distance.length);
-      
-      // 準備數據
-      const data = [{
-        x: distance,
-        y: height,
-        type: 'scatter',
-        mode: 'lines',
-        line: {
-          color: 'royalblue',
-          width: 2
-        },
-        name: 'Height Profile'
-      }];
-      
-      // 設置布局
-      const layout = {
-        title: '',
-        xaxis: {
-          title: `Distance (${props.physUnit})`,
-          showgrid: true,
-          gridcolor: '#e5e5e5',
-          gridwidth: 1,
-          linewidth: 2,
-          linecolor: 'black',
-          zeroline: false
-        },
-        yaxis: {
-          title: `Height (${props.physUnit})`,
-          showgrid: true,
-          gridcolor: '#e5e5e5',
-          gridwidth: 1,
-          linewidth: 2,
-          linecolor: 'black',
-          zeroline: false
-        },
-        margin: { l: 60, r: 30, t: 30, b: 60 },
-        showlegend: false,
-        plot_bgcolor: 'white',
-        paper_bgcolor: 'white',
-        autosize: true
-      };
-      
-      // 設置配置
-      const config = {
-        responsive: true,
-        displayModeBar: true,
-        modeBarButtonsToRemove: [
-          'sendDataToCloud', 'editInChartStudio'
-        ],
-        displaylogo: false
-      };
-      
-      // 創建圖表
-      Plotly.newPlot(plotlyContainer.value, data, layout, config);
-      
-      // 保存圖表實例
-      plotlyInstance = plotlyContainer.value;
-    };
-    
-    // 更新剖面圖
-    const updatePlotlyChart = () => {
-      if (plotlyInstance) {
-        Plotly.purge(plotlyInstance);
-      }
-      createPlotlyChart();
-    };
-    
-    // 監視剖面數據變化
-    watch(() => props.profileData, () => {
-      console.log('profileData變更，更新圖表');
-      updatePlotlyChart();
-    }, { deep: true });
-    
-    // 組件掛載時創建圖表
-    onMounted(() => {
-      console.log('ProfileViewer掛載');
-      createPlotlyChart();
-    });
-    
-    return {
-      plotlyContainer,
-      profileLength,
-      isMeasuring,
-      formatNumber,
-      handleClick,
-      toggleMeasureMode
-    };
-  }
+    }
 });
 </script>
 

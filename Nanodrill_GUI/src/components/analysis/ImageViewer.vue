@@ -87,24 +87,6 @@
         <div v-else class="font-medium">已完成測量！</div>
       </div>
     </div>
-    
-    <!-- 統計信息面板 -->
-    <div v-if="showStats && stats" class="py-1 px-3 bg-gray-50 border-t border-gray-200 text-xs">
-      <div class="grid grid-cols-4 gap-2">
-        <div class="text-gray-600">
-          <span class="font-medium">最小值:</span> {{ formatNumber(stats.min) }} {{ physUnit }}
-        </div>
-        <div class="text-gray-600">
-          <span class="font-medium">最大值:</span> {{ formatNumber(stats.max) }} {{ physUnit }}
-        </div>
-        <div class="text-gray-600">
-          <span class="font-medium">平均值:</span> {{ formatNumber(stats.mean) }} {{ physUnit }}
-        </div>
-        <div class="text-gray-600">
-          <span class="font-medium">RMS:</span> {{ formatNumber(stats.rms) }} {{ physUnit }}
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -140,8 +122,8 @@ interface Point {
 // 定義目標剖面視圖接口
 interface TargetProfileViewer {
   id: string;
-  groupId: string;
-  viewerIndex: number;
+  groupId?: string;
+  viewerIndex?: number;
 }
 
 export default defineComponent({
@@ -231,12 +213,6 @@ export default defineComponent({
     const lineEnd = ref<Point | null>(null);
     const mouseMovePos = ref<Point>({ x: 0, y: 0 });
     
-    // 格式化數字，保留兩位小數
-    const formatNumber = (value: number) => {
-      if (value === undefined || value === null) return 'N/A';
-      return value.toFixed(2);
-    };
-    
     // 處理點擊事件
     const handleClick = () => {
       emit('click');
@@ -264,8 +240,8 @@ export default defineComponent({
       }
     };
     
-    // 處理Plotly點擊事件 - 簡化版本
-    const handlePlotlyClick = (event: MouseEvent) => {
+    // 處理Plotly點擊事件
+    const handlePlotlyClick = (event: any) => {
       // 如果不在測量模式，則不處理
       if (!props.profileMeasureMode) return;
       
@@ -459,33 +435,6 @@ export default defineComponent({
       }
     }, { immediate: true });
     
-    // 監視 colormap 變化
-    watch(() => props.colormap, () => {
-      updatePlotlyChart();
-    });
-    
-    // 監視 zScale 變化
-    watch(() => props.zScale, () => {
-      if (plotlyInstance) {
-        const zMin = props.stats ? props.stats.min : null;
-        const zMax = props.stats ? props.stats.max : null;
-        
-        if (zMin !== null && zMax !== null) {
-          const zRange = zMax - zMin;
-          const mid = (zMax + zMin) / 2;
-          
-          // 根據 zScale 調整顯示範圍
-          const newZMin = mid - (zRange / 2) / props.zScale;
-          const newZMax = mid + (zRange / 2) / props.zScale;
-          
-          Plotly.relayout(plotlyInstance, {
-            'coloraxis.cmin': newZMin,
-            'coloraxis.cmax': newZMax
-          });
-        }
-      }
-    });
-    
     // 監視測量模式變化
     watch(() => props.profileMeasureMode, (newMode) => {
       if (newMode) {
@@ -516,7 +465,6 @@ export default defineComponent({
       lineStart,
       lineEnd,
       mouseMovePos,
-      formatNumber,
       handleClick,
       handlePlotlyClick,
       handleMouseMove
