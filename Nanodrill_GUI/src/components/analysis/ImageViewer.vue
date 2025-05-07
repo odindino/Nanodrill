@@ -47,40 +47,6 @@
           <span class="text-sm text-gray-500">尚未載入圖像</span>
         </div>
       </div>
-      
-      <!-- 測量模式提示 -->
-      <div v-if="profileMeasureMode" class="absolute top-2 left-2 right-2 bg-blue-100 text-blue-800 p-2 rounded-md z-10 text-sm">
-        <div v-if="!lineStart" class="font-medium">請點擊設置起點</div>
-        <div v-else-if="isDrawingLine" class="font-medium">請點擊設置終點</div>
-        <div v-else class="font-medium">已完成測量！</div>
-      </div>
-      
-      <!-- 線性剖面繪製線 -->
-      <svg v-if="profileMeasureMode" class="absolute top-0 left-0 w-full h-full pointer-events-none">
-        <!-- 繪製起點和終點之間的線段 -->
-        <line v-if="lineStart && (isDrawingLine || lineEnd)"
-              :x1="lineStart.x"
-              :y1="lineStart.y"
-              :x2="isDrawingLine ? mouseMovePos.x : lineEnd.x"
-              :y2="isDrawingLine ? mouseMovePos.y : lineEnd.y"
-              stroke="#ff6b6b"
-              stroke-width="2"
-              stroke-dasharray="5,5" />
-        
-        <!-- 起點圓點 -->
-        <circle v-if="lineStart"
-                :cx="lineStart.x"
-                :cy="lineStart.y"
-                r="4"
-                fill="#ff6b6b" />
-        
-        <!-- 終點圓點 -->
-        <circle v-if="lineEnd"
-                :cx="lineEnd.x"
-                :cy="lineEnd.y"
-                r="4"
-                fill="#ff6b6b" />
-      </svg>
     </div>
     
     <!-- 圖像統計信息 -->
@@ -220,12 +186,6 @@ export default defineComponent({
     const plotlyContainer = ref<HTMLElement | null>(null);
     let plotlyInstance: any = null;
     
-    // 線性剖面相關狀態
-    const isDrawingLine = ref(false);
-    const lineStart = ref<Point | null>(null);
-    const lineEnd = ref<Point | null>(null);
-    const mouseMovePos = ref<Point>({ x: 0, y: 0 });
-    
     // 格式化數字，保留2位小數
     const formatNumber = (value: number) => {
       if (value === undefined || value === null) return 'N/A';
@@ -264,41 +224,7 @@ export default defineComponent({
       }
     };
     
-    // 處理Plotly點擊事件
-    const handlePlotlyClick = (event: any) => {
-      // 如果不在測量模式，則不處理
-      if (!props.profileMeasureMode) return;
-      
-      // 獲取點擊的座標
-      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      
-      if (!lineStart.value) {
-        // 設置起點
-        lineStart.value = { x, y };
-        isDrawingLine.value = true;
-      } else if (isDrawingLine.value) {
-        // 設置終點
-        lineEnd.value = { x, y };
-        isDrawingLine.value = false;
-        
-        // 處理剖面數據
-        sendProfileData();
-      }
-    };
-
     
-    // 處理鼠標移動事件
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!props.profileMeasureMode || !isDrawingLine.value) return;
-      
-      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-      mouseMovePos.value = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top
-      };
-    };
     
     // 獲取物理座標
     const getPhysicalCoordinates = (point: Point, plotlyRect: DOMRect) => {
@@ -324,42 +250,6 @@ export default defineComponent({
       };
     };
     
-    // 發送剖面數據
-    const sendProfileData = () => {
-      if (!lineStart.value || !lineEnd.value || !plotlyContainer.value) return;
-      
-      const rect = plotlyContainer.value.getBoundingClientRect();
-      
-      const startCoord = getPhysicalCoordinates(lineStart.value, rect);
-      const endCoord = getPhysicalCoordinates(lineEnd.value, rect);
-      
-      // 發送事件
-      emit('line-profile', {
-        startPoint: [startCoord.pixelY, startCoord.pixelX],
-        endPoint: [endCoord.pixelY, endCoord.pixelX],
-        physicalStart: [startCoord.physicalX, startCoord.physicalY],
-        physicalEnd: [endCoord.physicalX, endCoord.physicalY],
-        unit: props.physUnit,
-        sourceViewerId: props.id,
-        sourceViewerTitle: props.title,
-        sourceData: {
-          imageRawData: props.imageRawData,
-          dimensions: props.dimensions,
-          title: props.title,
-          physUnit: props.physUnit
-        },
-        targetProfileViewer: props.targetProfileViewer
-      });
-      
-      // 通知測量完成
-      emit('measure-completed');
-      
-      // 短暫延遲後重置線
-      setTimeout(() => {
-        lineStart.value = null;
-        lineEnd.value = null;
-      }, 1000);
-    };
     
     // 創建 Plotly 圖表
     const createPlotlyChart = () => {
@@ -433,11 +323,6 @@ export default defineComponent({
       Plotly.newPlot(plotlyContainer.value, data, layout, config);
       plotlyInstance = plotlyContainer.value;
       
-      // 添加事件監聽
-      if (plotlyInstance) {
-        plotlyInstance.on('click', handlePlotlyClick);
-        plotlyInstance.addEventListener('mousemove', handleMouseMove);
-      }
     };
     
     // 更新 Plotly 圖表
@@ -469,22 +354,6 @@ export default defineComponent({
       updatePlotlyChart();
     });
     
-    // 監視測量模式變化
-    watch(() => props.profileMeasureMode, (newMode) => {
-      if (newMode) {
-        // 進入測量模式，禁用Plotly交互
-        disablePlotlyInteractions();
-        
-        // 重置狀態
-        lineStart.value = null;
-        lineEnd.value = null;
-        isDrawingLine.value = false;
-      } else {
-        // 退出測量模式，啟用Plotly交互
-        enablePlotlyInteractions();
-      }
-    });
-    
     // 組件掛載時
     onMounted(() => {
       if (props.imageRawData) {
@@ -495,10 +364,6 @@ export default defineComponent({
     return {
       imageContainer,
       plotlyContainer,
-      isDrawingLine,
-      lineStart,
-      lineEnd,
-      mouseMovePos,
       handleClick,
       closeViewer,
       formatNumber
