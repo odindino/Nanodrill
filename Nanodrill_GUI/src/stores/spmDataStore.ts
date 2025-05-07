@@ -128,6 +128,30 @@ export const useSpmDataStore = defineStore('spmData', {
       this.currentView = view;
     },
 
+    // 添加新標籤頁
+    addNewTab(tabData: AnalysisTab) {
+      this.analysisTabs.push(tabData);
+    },
+
+    // 獲取視圖所屬的標籤頁和群組
+    getViewerLocation(viewerId: string): { tabId: string, groupId: string, viewerIndex: number } | null {
+      for (const tab of this.analysisTabs) {
+        if (tab.viewerGroups) {
+          for (const group of tab.viewerGroups) {
+            const viewerIndex = group.viewers.findIndex(v => v.id === viewerId);
+            if (viewerIndex !== -1) {
+              return {
+                tabId: tab.id,
+                groupId: group.id,
+                viewerIndex
+              };
+            }
+          }
+        }
+      }
+      return null;
+    },
+
     // 新增分析標籤頁
     addAnalysisTab(file: FileInfo, content: FileContent) {
       // 檢查該檔案是否已經開啟了標籤頁

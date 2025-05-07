@@ -2,7 +2,7 @@
 <template>
   <div class="image-viewer h-full flex flex-col bg-white rounded-lg overflow-hidden"
        :class="{ 'ring-2 ring-primary': isActive }"
-       @click="handleClick">
+       >
     <!-- 控制欄 -->
     <div class="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200">
       <h3 class="text-sm font-medium text-gray-700 truncate">{{ title || 'Image Viewer' }}</h3>
@@ -23,7 +23,7 @@
     </div>
     
     <!-- 主要圖像顯示區域 -->
-    <div class="flex-grow overflow-hidden relative min-h-[400px]" ref="imageContainer">
+    <div class="flex-grow overflow-hidden relative min-h-[300px]" ref="imageContainer">
       <!-- 載入中顯示 -->
       <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-gray-50">
         <div class="flex flex-col items-center">
@@ -32,51 +32,19 @@
         </div>
       </div>
       
-      <!-- 實際圖像 - 使用Plotly互動式圖表 -->
-      <div v-else class="h-full w-full relative">
-        <!-- Plotly 圖表容器 -->
-        <div v-if="imageRawData" 
-             ref="plotlyContainer" 
-             class="w-full h-full"
-             @click="handlePlotlyClick"
-             @mousemove="handleMouseMove">
-        </div>
-        
-        <!-- 線性剖面繪製線 -->
-        <svg v-if="profileMeasureMode" class="absolute top-0 left-0 w-full h-full pointer-events-none">
-          <!-- 繪製起點和終點之間的線段 -->
-          <line v-if="lineStart && (isDrawingLine || lineEnd)"
-                :x1="lineStart.x"
-                :y1="lineStart.y"
-                :x2="isDrawingLine ? mouseMovePos.x : lineEnd.x"
-                :y2="isDrawingLine ? mouseMovePos.y : lineEnd.y"
-                stroke="#ff6b6b"
-                stroke-width="2"
-                stroke-dasharray="5,5" />
-          
-          <!-- 起點圓點 -->
-          <circle v-if="lineStart"
-                  :cx="lineStart.x"
-                  :cy="lineStart.y"
-                  r="4"
-                  fill="#ff6b6b" />
-          
-          <!-- 終點圓點 -->
-          <circle v-if="lineEnd"
-                  :cx="lineEnd.x"
-                  :cy="lineEnd.y"
-                  r="4"
-                  fill="#ff6b6b" />
-        </svg>
-        
-        <!-- 無圖像數據提示 -->
-        <div v-if="!imageRawData" class="absolute inset-0 flex items-center justify-center bg-gray-50">
-          <div class="text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span class="text-sm text-gray-500">尚未載入圖像</span>
-          </div>
+      <!-- Plotly 圖表容器 -->
+      <div v-else-if="imageRawData" 
+           ref="plotlyContainer" 
+           class="w-full h-full">
+      </div>
+      
+      <!-- 無圖像數據提示 -->
+      <div v-else class="absolute inset-0 flex items-center justify-center bg-gray-50">
+        <div class="text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span class="text-sm text-gray-500">尚未載入圖像</span>
         </div>
       </div>
       
@@ -86,12 +54,57 @@
         <div v-else-if="isDrawingLine" class="font-medium">請點擊設置終點</div>
         <div v-else class="font-medium">已完成測量！</div>
       </div>
+      
+      <!-- 線性剖面繪製線 -->
+      <svg v-if="profileMeasureMode" class="absolute top-0 left-0 w-full h-full pointer-events-none">
+        <!-- 繪製起點和終點之間的線段 -->
+        <line v-if="lineStart && (isDrawingLine || lineEnd)"
+              :x1="lineStart.x"
+              :y1="lineStart.y"
+              :x2="isDrawingLine ? mouseMovePos.x : lineEnd.x"
+              :y2="isDrawingLine ? mouseMovePos.y : lineEnd.y"
+              stroke="#ff6b6b"
+              stroke-width="2"
+              stroke-dasharray="5,5" />
+        
+        <!-- 起點圓點 -->
+        <circle v-if="lineStart"
+                :cx="lineStart.x"
+                :cy="lineStart.y"
+                r="4"
+                fill="#ff6b6b" />
+        
+        <!-- 終點圓點 -->
+        <circle v-if="lineEnd"
+                :cx="lineEnd.x"
+                :cy="lineEnd.y"
+                r="4"
+                fill="#ff6b6b" />
+      </svg>
+    </div>
+    
+    <!-- 圖像統計信息 -->
+    <div v-if="showStats && stats" class="p-2 bg-gray-50 border-t border-gray-200 text-xs">
+      <div class="grid grid-cols-4 gap-2">
+        <div class="text-gray-600">
+          <span class="font-medium">最小:</span> {{ formatNumber(stats.min) }} {{ physUnit }}
+        </div>
+        <div class="text-gray-600">
+          <span class="font-medium">最大:</span> {{ formatNumber(stats.max) }} {{ physUnit }}
+        </div>
+        <div class="text-gray-600">
+          <span class="font-medium">平均:</span> {{ formatNumber(stats.mean) }} {{ physUnit }}
+        </div>
+        <div class="text-gray-600">
+          <span class="font-medium">RMS:</span> {{ formatNumber(stats.rms) }} {{ physUnit }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, watch } from 'vue';
+import { defineComponent, ref, computed, watch, onMounted } from 'vue';
 import type { PropType } from 'vue';
 import Plotly from 'plotly.js-dist-min';
 
@@ -213,10 +226,17 @@ export default defineComponent({
     const lineEnd = ref<Point | null>(null);
     const mouseMovePos = ref<Point>({ x: 0, y: 0 });
     
-    // 處理點擊事件
-    const handleClick = () => {
-      emit('click');
+    // 格式化數字，保留2位小數
+    const formatNumber = (value: number) => {
+      if (value === undefined || value === null) return 'N/A';
+      return value.toFixed(2);
     };
+    
+    // 處理點擊事件
+    // const handleClick = () => {
+    //   console.log('ImageViewer 點擊');
+    //   emit('click');
+    // };
     
     // 禁用Plotly默認交互
     const disablePlotlyInteractions = () => {
@@ -360,7 +380,7 @@ export default defineComponent({
       // 準備布局
       const layout = {
         title: '',
-        margin: { l: 50, r: 150, b: 65, t: 25 },
+        margin: { l: 50, r: 100, b: 70, t: 30 },
         xaxis: {
           title: `X (${props.physUnit})`,
           constrain: 'domain',
@@ -406,9 +426,13 @@ export default defineComponent({
       
       // 創建圖表
       Plotly.newPlot(plotlyContainer.value, data, layout, config);
-      
-      // 保存圖表實例用於更新
       plotlyInstance = plotlyContainer.value;
+      
+      // 添加事件監聽
+      if (plotlyInstance) {
+        plotlyInstance.on('click', handlePlotlyClick);
+        plotlyInstance.addEventListener('mousemove', handleMouseMove);
+      }
     };
     
     // 更新 Plotly 圖表
@@ -434,6 +458,11 @@ export default defineComponent({
         }
       }
     }, { immediate: true });
+    
+    // 監視色彩映射變化
+    watch(() => props.colormap, () => {
+      updatePlotlyChart();
+    });
     
     // 監視測量模式變化
     watch(() => props.profileMeasureMode, (newMode) => {
@@ -465,18 +494,17 @@ export default defineComponent({
       lineStart,
       lineEnd,
       mouseMovePos,
-      handleClick,
-      handlePlotlyClick,
-      handleMouseMove
+      // handleClick,
+      formatNumber
     };
   }
 });
 </script>
 
 <style scoped>
-/* 自定義樣式 */
+/* 確保視圖高度填滿容器 */
 .image-viewer {
-  position: relative;
+  height: 100%;
 }
 
 /* 測量模式下的鼠標樣式 */
