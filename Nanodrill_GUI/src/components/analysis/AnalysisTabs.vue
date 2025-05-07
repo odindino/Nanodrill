@@ -141,7 +141,8 @@ export default defineComponent({
     'tab-added',
     'tab-updated',
     'group-to-tab',
-    'create-line-profile'
+    'create-line-profile',
+    'viewer-activated'
   ],
   setup(props, { emit }) {
     // DOM引用
@@ -252,9 +253,57 @@ export default defineComponent({
     };
     
     // 處理視圖激活
-    const handleViewerActivated = ({ groupId, viewerIndex, viewerId }: any) => {
-      // 可能需要更新視圖的狀態
-      console.log('視圖已激活:', groupId, viewerIndex, viewerId);
+    const handleViewerActivated = (data: any) => {
+      // 更新本地狀態
+      console.log('分析標籤頁收到視圖激活事件:', data);
+      
+      // 将事件傳遞給父組件
+      emit('viewer-activated', data);
+      
+      // 處理本地視圖狀態更新
+      if (!activeTab.value) return;
+      
+      const updatedGroups = [...activeTab.value.viewerGroups];
+      const groupIndex = updatedGroups.findIndex(g => g.id === data.groupId);
+      
+      if (groupIndex !== -1) {
+        // 更新這個群組的所有視圖的活動狀態
+        updatedGroups[groupIndex] = {
+          ...updatedGroups[groupIndex],
+          viewers: updatedGroups[groupIndex].viewers.map((viewer, idx) => {
+            const isActive = idx === data.viewerIndex;
+            return {
+              ...viewer,
+              props: {
+                ...viewer.props,
+                isActive
+              }
+            };
+          })
+        };
+        
+        // 更新其他群組的視圖活動狀態為false
+        for (let i = 0; i < updatedGroups.length; i++) {
+          if (i !== groupIndex) {
+            updatedGroups[i] = {
+              ...updatedGroups[i],
+              viewers: updatedGroups[i].viewers.map(viewer => ({
+                ...viewer,
+                props: {
+                  ...viewer.props,
+                  isActive: false
+                }
+              }))
+            };
+          }
+        }
+        
+        // 更新標籤頁
+        emit('tab-updated', {
+          id: activeTab.value.id,
+          changes: { viewerGroups: updatedGroups }
+        });
+      }
     };
     
     // 將群組轉換為標籤頁

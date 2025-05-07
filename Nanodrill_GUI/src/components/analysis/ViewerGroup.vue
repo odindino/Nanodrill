@@ -76,6 +76,7 @@
           'overflow-hidden'
         ]"
         :style="getViewerStyle(0)"
+        @click.stop="activateViewer(0)"
       >
         <component 
           :is="viewers[0].component" 
@@ -107,6 +108,7 @@
           'overflow-hidden'
         ]"
         :style="getViewerStyle(1)"
+        @click.stop="activateViewer(1)"
       >
         <component 
           :is="viewers[1].component" 
@@ -235,13 +237,36 @@ export default defineComponent({
     
     // 啟用視圖
     const activateViewer = (index: number) => {
+      console.log(`在群組 ${props.id} 中啟用視圖 ${index}`);
+      
+      if (index < 0 || index >= props.viewers.length) {
+        console.error('無效的視圖索引:', index);
+        return;
+      }
+      
       activeViewerIndex.value = index;
-      emit('activate-viewer', { groupId: props.id, viewerIndex: index, viewerId: props.viewers[index].id });
+      
+      // 發送事件通知父組件視圖被激活
+      emit('activate-viewer', { 
+        groupId: props.id, 
+        viewerIndex: index, 
+        viewerId: props.viewers[index].id,
+        viewerComponent: props.viewers[index].component
+      });
     };
     
     // 移除視圖
     const removeViewer = (index: number) => {
-      emit('remove-viewer', { groupId: props.id, viewerIndex: index, viewerId: props.viewers[index].id });
+      if (index < 0 || index >= props.viewers.length) {
+        console.error('無效的視圖索引:', index);
+        return;
+      }
+      
+      emit('remove-viewer', { 
+        groupId: props.id, 
+        viewerIndex: index, 
+        viewerId: props.viewers[index].id 
+      });
     };
     
     // 關閉群組
@@ -381,6 +406,11 @@ export default defineComponent({
     onMounted(() => {
       firstViewerWidth.value = 50;
       firstViewerHeight.value = 50;
+      
+      // 如果有視圖，默認激活第一個
+      if (props.viewers.length > 0) {
+        activateViewer(0);
+      }
     });
     
     return {

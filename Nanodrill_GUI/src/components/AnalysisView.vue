@@ -14,327 +14,26 @@
     <div v-else class="h-full flex relative">
       <!-- 左側面板區域 -->
       <div class="h-full flex flex-col">
-        <!-- 檔案選擇器迷你面板 -->
-        <div 
-          class="sidebar-panel bg-white border-r border-gray-200 transition-all duration-300 flex flex-col"
-          :class="showFileSelector ? 'w-80' : 'w-12'"
-        >
-          <!-- 標題或迷你按鈕 -->
-          <div 
-            class="flex items-center p-2 border-b border-gray-200 bg-gray-50"
-            :class="showFileSelector ? 'justify-between' : 'justify-center'"
-          >
-            <h3 v-if="showFileSelector" class="text-sm font-medium text-gray-700 truncate">檔案選擇</h3>
-            <button 
-              @click="toggleFileSelector"
-              class="p-1.5 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
-              :title="showFileSelector ? '收起檔案選擇器' : '展開檔案選擇器'"
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                class="h-5 w-5" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-                :class="{ 'transform rotate-180': showFileSelector }"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          </div>
-          
-          <!-- 檔案選擇器內容 -->
-          <div v-if="showFileSelector" class="flex-grow overflow-y-auto p-4">
-            <div v-if="activeTab">
-              <h3 class="text-sm font-medium text-gray-700 mb-2">選擇分析檔案</h3>
-              
-              <div class="mb-4">
-                <label class="text-xs text-gray-500 block mb-1">檔案選擇</label>
-                <select 
-                  v-model="selectedFileId" 
-                  class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                  :disabled="!activeTab || !activeTab.relatedFiles || activeTab.relatedFiles.length === 0"
-                >
-                  <option v-for="file in availableFiles" :key="file.path" :value="file.path">
-                    {{ file.name }}
-                  </option>
-                </select>
-                <p v-if="!availableFiles || availableFiles.length === 0" class="text-xs text-gray-500 mt-1">
-                  沒有可用的相關檔案
-                </p>
-              </div>
-              
-              <button 
-                @click="loadSelectedFile" 
-                class="w-full py-2 px-4 bg-primary text-white font-medium rounded transition-colors hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="!selectedFileId || isTabLoading"
-              >
-                <span v-if="isTabLoading">載入中...</span>
-                <span v-else>載入檔案</span>
-              </button>
-              
-              <!-- 檔案資訊區塊 -->
-              <div v-if="activeTab && activeTab.txtContent" class="mt-4 pt-4 border-t border-gray-200">
-                <h3 class="text-sm font-medium text-gray-700 mb-3">檔案資訊</h3>
-                
-                <div class="bg-white rounded-lg border border-gray-200 overflow-y-auto max-h-80">
-                  <!-- 基本參數 -->
-                  <div class="p-3">
-                    <h4 class="font-medium text-sm border-b pb-1 mb-3">基本參數</h4>
-                    
-                    <div class="grid grid-cols-1 gap-1.5">
-                      <!-- 參數項目 - 每個參數一行 -->
-                      <div v-for="(value, key) in parametersToDisplay" :key="key" class="info-row flex">
-                        <div class="text-sm font-medium text-gray-700 w-32 flex-shrink-0">{{ key }}:</div>
-                        <div class="text-sm text-gray-900 flex-1">{{ value }}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div v-else class="text-center text-gray-500 text-sm pt-4">
-              請先選擇一個分析標籤頁
-            </div>
-          </div>
-          
-          <!-- 迷你模式下只顯示圖標 -->
-          <div v-else class="flex-grow flex flex-col items-center pt-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-        </div>
+        <!-- 檔案選擇器面板 - 使用新組件 -->
+        <FileSelectorPanel 
+          :active-tab="activeTab" 
+          :is-loading="isTabLoading"
+          @toggle-selector="showFileSelector = $event"
+          @load-file="loadSelectedFile"
+        />
         
-        <!-- 工具列迷你面板 -->
-        <div 
-          class="sidebar-panel bg-white border-r border-gray-200 transition-all duration-300 flex flex-col mt-2"
-          :class="showToolsPanel ? 'w-80' : 'w-12'"
-        >
-          <!-- 標題或迷你按鈕 -->
-          <div 
-            class="flex items-center p-2 border-b border-gray-200 bg-gray-50"
-            :class="showToolsPanel ? 'justify-between' : 'justify-center'"
-          >
-            <h3 v-if="showToolsPanel" class="text-sm font-medium text-gray-700 truncate">工具列</h3>
-            <button 
-              @click="toggleToolsPanel"
-              class="p-1.5 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
-              :title="showToolsPanel ? '收起工具列' : '展開工具列'"
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                class="h-5 w-5" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-                :class="{ 'transform rotate-180': showToolsPanel }"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          </div>
-          
-          <!-- 工具列內容 -->
-          <div v-if="showToolsPanel" class="flex-grow overflow-y-auto p-4">
-            <template v-if="activeViewer">
-              <div v-if="activeViewer.component === 'ImageViewer'" class="space-y-4">
-                <h4 class="font-medium text-sm border-b pb-2 mb-2">影像處理</h4>
-                
-                <!-- 平面校正工具 -->
-                <div>
-                  <label class="text-xs text-gray-500 block mb-1">平面校正</label>
-                  <div class="flex space-x-2">
-                    <button 
-                      @click="applyFlatten('mean')"
-                      class="flex-1 py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      線性平面化
-                    </button>
-                    <button 
-                      @click="applyFlatten('polyfit')"
-                      class="flex-1 py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      多項式平面化
-                    </button>
-                  </div>
-                </div>
-                
-                <!-- 傾斜調整工具 -->
-                <div>
-                  <label class="text-xs text-gray-500 block mb-1">傾斜調整</label>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="col-span-2 mb-1">
-                      <div class="flex items-center">
-                        <input 
-                          type="checkbox" 
-                          id="tilt-fine-tune" 
-                          v-model="fineTuneTilt"
-                          class="h-3 w-3 text-primary focus:ring-primary border-gray-300 rounded"
-                        >
-                        <label for="tilt-fine-tune" class="ml-1 text-xs text-gray-700">
-                          微調模式
-                        </label>
-                      </div>
-                    </div>
-                    <button 
-                      @click="adjustTilt('up')"
-                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      向上傾斜
-                    </button>
-                    <button 
-                      @click="adjustTilt('down')"
-                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      向下傾斜
-                    </button>
-                    <button 
-                      @click="adjustTilt('left')"
-                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      向左傾斜
-                    </button>
-                    <button 
-                      @click="adjustTilt('right')"
-                      class="py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      向右傾斜
-                    </button>
-                  </div>
-                </div>
-                
-                <!-- 色彩映射 -->
-                <div>
-                  <label class="text-xs text-gray-500 block mb-1">色彩映射</label>
-                  <select 
-                    v-model="activeTabColormap" 
-                    class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                    @change="updateActiveTabSettings({colormap: activeTabColormap})"
-                  >
-                    <option value="viridis">Viridis</option>
-                    <option value="plasma">Plasma</option>
-                    <option value="inferno">Inferno</option>
-                    <option value="magma">Magma</option>
-                    <option value="cividis">Cividis</option>
-                    <option value="Oranges">Oranges</option>
-                    <option value="hot">Hot</option>
-                    <option value="cool">Cool</option>
-                    <option value="jet">Jet</option>
-                  </select>
-                </div>
-                
-                <!-- 高度縮放 -->
-                <div>
-                  <div class="flex justify-between mb-1">
-                    <label class="text-xs text-gray-500">高度縮放</label>
-                    <span class="text-xs text-gray-500">{{ activeTabZScale.toFixed(1) }}x</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    v-model="activeTabZScale" 
-                    min="0.1" 
-                    max="5" 
-                    step="0.1" 
-                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    @change="updateActiveTabSettings({zScale: activeTabZScale})"
-                  >
-                </div>
-                
-                <!-- 剖面分析 -->
-                <div>
-                  <label class="text-xs text-gray-500 block mb-1">剖面分析</label>
-                  <button 
-                    @click="createLineProfile"
-                    class="w-full py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    建立線性剖面
-                  </button>
-                </div>
-              </div>
-              
-              <!-- 剖面視圖工具 -->
-              <div v-else-if="activeViewer.component === 'ProfileViewer'" class="space-y-4">
-                <h4 class="font-medium text-sm border-b pb-2 mb-2">剖面設定</h4>
-                
-                <!-- 將最小值歸零選項 -->
-                <div class="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    id="shift-zero" 
-                    v-model="profileSettings.shiftZero"
-                    class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                    @change="updateProfile"
-                  >
-                  <label for="shift-zero" class="ml-2 text-sm text-gray-700">
-                    將最小值歸零
-                  </label>
-                </div>
-                
-                <!-- 自動縮放選項 -->
-                <div class="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    id="auto-scale" 
-                    v-model="profileSettings.autoScale"
-                    class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                    @change="updateProfile"
-                  >
-                  <label for="auto-scale" class="ml-2 text-sm text-gray-700">
-                    自動縮放
-                  </label>
-                </div>
-                
-                <!-- 顯示峰值選項 -->
-                <div class="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    id="show-peaks" 
-                    v-model="profileSettings.showPeaks"
-                    class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                    @change="updateProfile"
-                  >
-                  <label for="show-peaks" class="ml-2 text-sm text-gray-700">
-                    顯示峰值
-                  </label>
-                </div>
-                
-                <!-- 峰值敏感度 -->
-                <div v-if="profileSettings.showPeaks">
-                  <div class="flex justify-between mb-1">
-                    <label class="text-xs text-gray-500">峰值敏感度</label>
-                    <span class="text-xs text-gray-500">{{ profileSettings.peakSensitivity.toFixed(1) }}</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    v-model="profileSettings.peakSensitivity" 
-                    min="0.1" 
-                    max="5" 
-                    step="0.1" 
-                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    @change="updateProfile"
-                  >
-                </div>
-              </div>
-              
-              <div v-else class="p-4 text-center text-gray-500">
-                <p>無可用工具</p>
-              </div>
-            </template>
-            
-            <div v-else class="p-4 text-center text-gray-500">
-              <p>請選擇一個視圖來顯示相應工具</p>
-            </div>
-          </div>
-          
-          <!-- 迷你模式下只顯示圖標 -->
-          <div v-else class="flex-grow flex flex-col items-center pt-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-        </div>
+        <!-- 工具列面板 - 使用新組件 -->
+        <ToolsPanel
+          :active-viewer="activeViewer"
+          :active-tab-colormap="activeTabColormap"
+          :active-tab-z-scale="activeTabZScale"
+          @toggle-panel="showToolsPanel = $event"
+          @update-settings="updateActiveTabSettings"
+          @apply-flatten="applyFlatten"
+          @adjust-tilt="adjustTilt"
+          @create-line-profile="createLineProfile"
+          @update-profile="updateProfile"
+        />
       </div>
       
       <!-- 主要分析標籤頁區域 -->
@@ -348,6 +47,7 @@
           @tab-updated="updateTab"
           @group-to-tab="handleGroupToTab"
           @create-line-profile="createLineProfile"
+          @viewer-activated="handleViewerActivated"
         />
       </div>
 
@@ -388,11 +88,15 @@
 import { defineComponent, ref, computed, watch, onMounted } from 'vue';
 import { useSpmDataStore } from '../stores/spmDataStore';
 import AnalysisTabs from './analysis/AnalysisTabs.vue';
+import FileSelectorPanel from './analysis/FileSelectorPanel.vue';
+import ToolsPanel from './analysis/ToolsPanel.vue';
 
 export default defineComponent({
   name: 'AnalysisView',
   components: {
-    AnalysisTabs
+    AnalysisTabs,
+    FileSelectorPanel,
+    ToolsPanel
   },
   setup() {
     const spmDataStore = useSpmDataStore();
@@ -412,39 +116,32 @@ export default defineComponent({
       return analysisTabs.value.find(tab => tab.id === activeTabId.value) || null;
     });
     
-    // 當前活動的視圖
+    // 當前活動的視圖和視圖群組
+    const activeGroupInfo = ref<{ groupId: string, viewerIndex: number, viewerId: string, viewerComponent: string } | null>(null);
+    
+    // 基於活動群組信息計算當前活動的視圖
     const activeViewer = computed(() => {
-      if (!activeTab.value || !activeTab.value.viewerGroups) return null;
+      if (!activeTab.value || !activeTab.value.viewerGroups || !activeGroupInfo.value) return null;
       
-      for (const group of activeTab.value.viewerGroups) {
-        for (const viewer of group.viewers) {
-          if (viewer.props && viewer.props.isActive) {
-            return viewer;
-          }
-        }
-      }
+      // 尋找活動群組
+      const group = activeTab.value.viewerGroups.find(group => group.id === activeGroupInfo.value?.groupId);
+      if (!group) return null;
       
-      return null;
+      // 返回活動視圖
+      return group.viewers[activeGroupInfo.value.viewerIndex] || null;
     });
+    
+    // 尋找當前活動的視圖群組
+    const findActiveGroup = () => {
+      if (!activeTab.value || !activeTab.value.viewerGroups || !activeGroupInfo.value) return null;
+      return activeTab.value.viewerGroups.find(group => group.id === activeGroupInfo.value?.groupId) || null;
+    };
     
     // 活動標籤頁設置
     const activeTabColormap = ref('Oranges');
     const activeTabZScale = ref(1.0);
     
-    // 檔案選擇
-    const selectedFileId = ref('');
-    
-    // 影像處理設置
-    const fineTuneTilt = ref(false);
-    
     // 剖面模式
-    const lineProfileMode = ref(false);
-    const isDrawingLine = ref(false);
-    const lineStart = ref<{x: number, y: number} | null>(null);
-    const lineEnd = ref<{x: number, y: number} | null>(null);
-    const mouseMovePos = ref({x: 0, y: 0});
-    
-    // 剖面數據
     const profileData = ref<{distance: number[], height: number[], length: number, stats: any} | null>(null);
     const profileImage = ref<string | null>(null);
     const profileSettings = ref({
@@ -454,37 +151,19 @@ export default defineComponent({
       peakSensitivity: 1.0
     });
     
-    // 可用檔案
-    const availableFiles = computed(() => {
-      if (!activeTab.value || !activeTab.value.relatedFiles) {
-        return [];
-      }
+    // 處理視圖啟用 - 新函數
+    const handleViewerActivated = (data: any) => {
+      console.log('AnalysisView 收到視圖啟用事件:', data);
       
-      return activeTab.value.relatedFiles.filter(file => 
-        file.path.toLowerCase().endsWith('.int')
-      );
-    });
-    
-    // 要顯示的參數
-    const parametersToDisplay = computed(() => {
-      if (!activeTab.value || !activeTab.value.parameters) {
-        return {};
-      }
+      // 更新當前活動的視圖信息
+      activeGroupInfo.value = {
+        groupId: data.groupId,
+        viewerIndex: data.viewerIndex,
+        viewerId: data.viewerId,
+        viewerComponent: data.viewerComponent
+      };
       
-      const params = { ...activeTab.value.parameters };
-      // 排除檔案描述
-      delete params.FileDescriptions;
-      return params;
-    });
-    
-    // 切換檔案選擇器
-    const toggleFileSelector = () => {
-      showFileSelector.value = !showFileSelector.value;
-    };
-    
-    // 切換工具面板
-    const toggleToolsPanel = () => {
-      showToolsPanel.value = !showToolsPanel.value;
+      console.log('活動視圖已更新:', activeViewer.value);
     };
     
     // 切換標籤頁
@@ -496,50 +175,97 @@ export default defineComponent({
       if (tab) {
         activeTabColormap.value = tab.colormap || 'Oranges';
         activeTabZScale.value = tab.zScale || 1.0;
+        
+        // 尋找活動的視圖群組和視圖
+        if (tab.viewerGroups && tab.viewerGroups.length > 0) {
+          // 尋找第一個有活動視圖的群組
+          for (const group of tab.viewerGroups) {
+            const activeViewerIndex = group.viewers.findIndex(viewer => viewer.props && viewer.props.isActive);
+            if (activeViewerIndex !== -1) {
+              // 找到活動視圖
+              activeGroupInfo.value = {
+                groupId: group.id,
+                viewerIndex: activeViewerIndex,
+                viewerId: group.viewers[activeViewerIndex].id,
+                viewerComponent: group.viewers[activeViewerIndex].component
+              };
+              break;
+            }
+          }
+          
+          // 如果沒有找到活動視圖，設置第一個群組的第一個視圖為活動
+          if (!activeGroupInfo.value) {
+            const firstGroup = tab.viewerGroups[0];
+            if (firstGroup.viewers.length > 0) {
+              activeGroupInfo.value = {
+                groupId: firstGroup.id,
+                viewerIndex: 0,
+                viewerId: firstGroup.viewers[0].id,
+                viewerComponent: firstGroup.viewers[0].component
+              };
+            }
+          }
+        } else {
+          // 清空活動視圖信息
+          activeGroupInfo.value = null;
+        }
       }
     };
     
     // 關閉標籤頁
     const closeTab = (tabId: string) => {
       spmDataStore.removeAnalysisTab(tabId);
+      
+      // 如果關閉的是當前標籤頁，清空活動視圖信息
+      if (tabId === activeTabId.value) {
+        activeGroupInfo.value = null;
+      }
     };
     
     // 添加標籤頁
     const addTab = (tab: any) => {
-      // 實現添加標籤頁的邏輯
+      // 實作添加標籤頁的邏輯
+      console.log('添加標籤頁:', tab);
+      // 如果需要，將tab添加到spmDataStore
     };
     
     // 更新標籤頁
     const updateTab = ({ id, changes }: { id: string, changes: any }) => {
-      // 實現更新標籤頁的邏輯
+      // 實作更新標籤頁的邏輯
+      console.log('更新標籤頁:', id, changes);
+      spmDataStore.updateAnalysisTabData(id, changes);
     };
     
     // 更新標籤頁設置
     const updateActiveTabSettings = (settings: any) => {
-      if (!activeTab.value) return;
+      if (!activeTabId.value) return;
       
       spmDataStore.updateAnalysisTabData(activeTabId.value, settings);
     };
     
     // 載入選中檔案
-    const loadSelectedFile = async () => {
-      if (!selectedFileId.value || !activeTab.value) return;
+    const loadSelectedFile = async ({ selectedFileId, activeTabId }: { selectedFileId: string, activeTabId: string }) => {
+      console.log('loadSelectedFile called with:', selectedFileId, activeTabId);
+      if (!selectedFileId || !activeTab.value) return;
       
       isTabLoading.value = true;
       tabLoadError.value = '';
       
       try {
         // 檢查檔案類型
-        if (selectedFileId.value.toLowerCase().endsWith('.int')) {
+        if (selectedFileId.toLowerCase().endsWith('.int')) {
+          console.log('處理INT檔案');
           // 處理 INT 檔案
           const response = await window.pywebview.api.analyze_int_file_api(
-            selectedFileId.value, 
+            selectedFileId, 
             activeTab.value.fileId
           );
           
+          console.log('API回應:', response);
+          
           if (response.success) {
             // 更新標籤頁數據
-            const fileName = selectedFileId.value.split(/[\/\\]/).pop() || '';
+            const fileName = selectedFileId.split(/[\/\\]/).pop() || '';
             
             // 創建新的視圖群組
             const groupId = `group-${activeTab.value.id}-${Date.now()}`;
@@ -560,33 +286,71 @@ export default defineComponent({
               }
             };
             
+            console.log('創建視圖:', imageViewer);
+            
             // 如果標籤頁尚未有視圖群組，添加一個新的
             if (!activeTab.value.viewerGroups || activeTab.value.viewerGroups.length === 0) {
-              spmDataStore.updateAnalysisTabData(activeTabId.value, {
-                viewerGroups: [{
-                  id: groupId,
-                  title: fileName,
-                  viewers: [imageViewer],
-                  layout: 'horizontal'
-                }]
+              console.log('創建新的視圖群組');
+              
+              const viewerGroup = {
+                id: groupId,
+                title: fileName,
+                viewers: [imageViewer],
+                layout: 'horizontal'
+              };
+              
+              console.log('新視圖群組:', viewerGroup);
+              
+              spmDataStore.updateAnalysisTabData(activeTabId, {
+                viewerGroups: [viewerGroup]
               });
+              
+              // 更新活動視圖信息
+              activeGroupInfo.value = {
+                groupId: groupId,
+                viewerIndex: 0,
+                viewerId: imageViewer.id,
+                viewerComponent: 'ImageViewer'
+              };
             } else {
               // 如果已經有視圖群組，添加到第一個群組
+              console.log('添加到現有視圖群組');
               const updatedGroups = [...activeTab.value.viewerGroups];
+              
+              // 將所有視圖設為非活動
+              updatedGroups[0].viewers = updatedGroups[0].viewers.map(viewer => ({
+                ...viewer,
+                props: {
+                  ...viewer.props,
+                  isActive: false
+                }
+              }));
+              
+              // 添加新視圖
               updatedGroups[0].viewers.push(imageViewer);
               
-              spmDataStore.updateAnalysisTabData(activeTabId.value, {
+              spmDataStore.updateAnalysisTabData(activeTabId, {
                 viewerGroups: updatedGroups
               });
+              
+              // 更新活動視圖信息
+              activeGroupInfo.value = {
+                groupId: updatedGroups[0].id,
+                viewerIndex: updatedGroups[0].viewers.length - 1,
+                viewerId: imageViewer.id,
+                viewerComponent: 'ImageViewer'
+              };
             }
             
             // 更新UI設置
             activeTabColormap.value = activeTab.value.colormap || 'Oranges';
             activeTabZScale.value = activeTab.value.zScale || 1.0;
           } else {
+            console.error('API回應失敗:', response.error);
             tabLoadError.value = response.error || '載入檔案時發生錯誤';
           }
         } else {
+          console.error('不支援的檔案類型');
           tabLoadError.value = '檔案類型不支援';
         }
       } catch (error) {
@@ -599,86 +363,87 @@ export default defineComponent({
     
     // 處理群組轉標籤頁
     const handleGroupToTab = (groupData: any) => {
-      // 實現群組轉標籤頁的邏輯
+      // 實作群組轉標籤頁的邏輯
+      console.log('群組轉標籤頁:', groupData);
     };
     
-    // 創建線性剖面
-    const createLineProfile = (data: any) => {
-          // 實現創建線性剖面的邏輯
-          lineProfileMode.value = true;
-        };
-
-        const handleCreateLineProfile = (data: any) => {
-      if (!activeTab.value || !activeGroupId.value) return;
+    // 創建線性剖面 - 添加到當前視圖群組
+    const createLineProfile = () => {
+      if (!activeTab.value) {
+        console.error('無活動標籤頁');
+        return;
+      }
       
-      // 查找當前活動的群組
-      const groupIndex = activeTab.value.viewerGroups.findIndex(g => g.id === activeGroupId.value);
-      if (groupIndex === -1) return;
+      console.log('創建線性剖面');
+      const activeGroup = findActiveGroup();
       
-      // 當接收到線性剖面事件時
-      const handleLineProfile = (eventData: any) => {
-        if (!eventData.profile) return;
-        
-        // 創建新的 ProfileViewer
-        const profileViewer = {
-          id: `viewer-profile-${Date.now()}`,
-          component: 'ProfileViewer',
-          props: {
-            profileData: eventData.profile,
-            title: 'Line Profile',
-            physUnit: eventData.unit || 'nm',
-            isActive: true,
-            showStats: true,
-            initialShiftZero: false,
-            initialAutoScale: true,
-            initialShowPeaks: false
-          }
+      if (!activeGroup) {
+        console.error('找不到活動視圖群組');
+        tabLoadError.value = '請先選擇或創建一個視圖群組';
+        return;
+      }
+      
+      // 創建新的ProfileViewer
+      const profileViewer = {
+        id: `viewer-profile-${Date.now()}`,
+        component: 'ProfileViewer',
+        props: {
+          title: '線性剖面',
+          physUnit: 'nm',
+          isActive: true,
+          showStats: false, // 初始不顯示統計信息
+          initialShiftZero: false,
+          initialAutoScale: true,
+          initialShowPeaks: false
+        }
+      };
+      
+      console.log('創建剖面視圖:', profileViewer);
+      
+      // 將所有視圖設為非活動
+      const updatedViewers = activeGroup.viewers.map(viewer => ({
+        ...viewer,
+        props: {
+          ...viewer.props,
+          isActive: false
+        }
+      }));
+      
+      // 添加新的剖面視圖
+      updatedViewers.push(profileViewer);
+      
+      // 更新視圖群組
+      const updatedGroups = [...activeTab.value.viewerGroups];
+      const groupIndex = updatedGroups.findIndex(group => group.id === activeGroup.id);
+      
+      if (groupIndex !== -1) {
+        updatedGroups[groupIndex] = {
+          ...activeGroup,
+          viewers: updatedViewers
         };
         
-        // 更新群組中的視圖
-        const updatedGroups = [...activeTab.value.viewerGroups];
-        const currentGroup = updatedGroups[groupIndex];
-        
-        // 設置所有視圖為非活動
-        currentGroup.viewers = currentGroup.viewers.map(viewer => ({
-          ...viewer,
-          props: {
-            ...viewer.props,
-            isActive: false
-          }
-        }));
-        
-        // 添加新的剖面視圖
-        currentGroup.viewers.push(profileViewer);
-        
-        // 更新標籤頁數據
+        // 更新標籤頁
         spmDataStore.updateAnalysisTabData(activeTabId.value, {
           viewerGroups: updatedGroups
         });
-      };
-      
-      // 綁定剖面事件處理
-      const viewer = activeTab.value.viewerGroups[groupIndex].viewers.find(v => v.id === data.sourceViewerId);
-      if (viewer) {
-        // 這裡假設你已經在當前函數範圍內實例化了一個 ImageViewer
-        // 實際上，你需要確保此處能夠正確地將 handleLineProfile 綁定到 ImageViewer 的事件上
-        // 由於是在 Vue 中使用，你可能需要通過其他方式實現事件傳遞
         
-        // 這裡的實現是一個簡化版，你可能需要根據你的應用架構調整
-        viewer.props = {
-          ...viewer.props,
-          onLineProfile: handleLineProfile
+        // 更新活動視圖信息
+        activeGroupInfo.value = {
+          groupId: activeGroup.id,
+          viewerIndex: updatedViewers.length - 1,
+          viewerId: profileViewer.id,
+          viewerComponent: 'ProfileViewer'
         };
         
-        // 更新標籤頁數據
-        spmDataStore.updateAnalysisTabData(activeTabId.value, {
-          viewerGroups: [...activeTab.value.viewerGroups]
-        });
+        console.log('更新後的視圖群組:', updatedGroups[groupIndex]);
+        console.log('更新後的活動視圖信息:', activeGroupInfo.value);
       }
     };
     
     // 更新剖面圖
-    const updateProfile = async () => {
+    const updateProfile = async (settings: any) => {
+      profileSettings.value = settings;
+      
       if (!profileData.value || !activeTab.value) return;
       
       try {
@@ -707,22 +472,19 @@ export default defineComponent({
     };
     
     // 應用平面化
-    const applyFlatten = async (method) => {
+    const applyFlatten = async (method: string) => {
       if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
       
       try {
-        // 找到當前活動的視圖
-        const group = activeTab.value.viewerGroups.find(g => g.id === activeGroupId);
-        if (!group) return;
+        // 尋找當前活動的視圖
+        const activeGroup = findActiveGroup();
+        if (!activeGroup || !activeTab.value) return;
         
-        const viewerIndex = group.viewers.findIndex(v => 
-          v.props && v.props.isActive && v.component === 'ImageViewer'
-        );
-        
-        if (viewerIndex === -1) return;
+        const viewerIndex = activeGroupInfo.value?.viewerIndex;
+        if (viewerIndex === undefined || viewerIndex < 0) return;
         
         // 獲取當前視圖的原始數據
-        const imageData = group.viewers[viewerIndex].props.imageRawData;
+        const imageData = activeGroup.viewers[viewerIndex].props.imageRawData;
         if (!imageData) {
           tabLoadError.value = "沒有可用的圖像數據";
           return;
@@ -739,7 +501,7 @@ export default defineComponent({
         
         if (response.success) {
           // 更新視圖數據
-          const updatedViewers = [...group.viewers];
+          const updatedViewers = [...activeGroup.viewers];
           updatedViewers[viewerIndex] = {
             ...updatedViewers[viewerIndex],
             props: {
@@ -751,8 +513,10 @@ export default defineComponent({
           
           // 更新視圖組
           const updatedGroups = [...activeTab.value.viewerGroups];
-          updatedGroups[updatedGroups.indexOf(group)] = {
-            ...group,
+          const groupIndex = updatedGroups.findIndex(group => group.id === activeGroup.id);
+          
+          updatedGroups[groupIndex] = {
+            ...activeGroup,
             viewers: updatedViewers
           };
           
@@ -772,22 +536,19 @@ export default defineComponent({
     };
     
     // 調整傾斜
-    const adjustTilt = async (direction) => {
+    const adjustTilt = async ({ direction, fineTune }: { direction: string, fineTune: boolean }) => {
       if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
       
       try {
-        // 找到當前活動的視圖
-        const group = activeTab.value.viewerGroups.find(g => g.id === activeGroupId);
-        if (!group) return;
+        // 尋找當前活動的視圖
+        const activeGroup = findActiveGroup();
+        if (!activeGroup || !activeTab.value) return;
         
-        const viewerIndex = group.viewers.findIndex(v => 
-          v.props && v.props.isActive && v.component === 'ImageViewer'
-        );
-        
-        if (viewerIndex === -1) return;
+        const viewerIndex = activeGroupInfo.value?.viewerIndex;
+        if (viewerIndex === undefined || viewerIndex < 0) return;
         
         // 獲取當前視圖的原始數據
-        const imageData = group.viewers[viewerIndex].props.imageRawData;
+        const imageData = activeGroup.viewers[viewerIndex].props.imageRawData;
         if (!imageData) {
           tabLoadError.value = "沒有可用的圖像數據";
           return;
@@ -799,12 +560,12 @@ export default defineComponent({
         const response = await window.pywebview.api.tilt_image(
           imageData, 
           direction,
-          fineTuneTilt.value
+          fineTune
         );
         
         if (response.success) {
           // 更新視圖數據
-          const updatedViewers = [...group.viewers];
+          const updatedViewers = [...activeGroup.viewers];
           updatedViewers[viewerIndex] = {
             ...updatedViewers[viewerIndex],
             props: {
@@ -816,8 +577,10 @@ export default defineComponent({
           
           // 更新視圖組
           const updatedGroups = [...activeTab.value.viewerGroups];
-          updatedGroups[updatedGroups.indexOf(group)] = {
-            ...group,
+          const groupIndex = updatedGroups.findIndex(group => group.id === activeGroup.id);
+          
+          updatedGroups[groupIndex] = {
+            ...activeGroup,
             viewers: updatedViewers
           };
           
@@ -842,11 +605,6 @@ export default defineComponent({
         // 更新當前標籤頁設置
         activeTabColormap.value = activeTab.value.colormap || 'Oranges';
         activeTabZScale.value = activeTab.value.zScale || 1.0;
-        
-        // 重置剖面模式
-        lineProfileMode.value = false;
-        lineStart.value = null;
-        lineEnd.value = null;
       }
     });
     
@@ -864,12 +622,11 @@ export default defineComponent({
           const intFile = newTab.relatedFiles?.find(f => f.path.toLowerCase().endsWith('.int'));
           
           if (intFile) {
-            selectedFileId.value = intFile.path;
-            
-            // 延遲執行載入，確保UI已更新
-            setTimeout(() => {
-              loadSelectedFile();
-            }, 100);
+            console.log('新標籤頁自動載入INT檔案:', intFile.path);
+            loadSelectedFile({
+              selectedFileId: intFile.path,
+              activeTabId: newTab.id
+            });
           }
         }
       }
@@ -891,8 +648,42 @@ export default defineComponent({
           const intFile = activeTab.value.relatedFiles?.find(f => f.path.toLowerCase().endsWith('.int'));
           
           if (intFile) {
-            selectedFileId.value = intFile.path;
-            loadSelectedFile();
+            console.log('現有標籤頁自動載入INT檔案:', intFile.path);
+            loadSelectedFile({
+              selectedFileId: intFile.path,
+              activeTabId: activeTab.value.id
+            });
+          }
+        }
+        
+        // 尋找活動的視圖群組和視圖
+        if (activeTab.value.viewerGroups && activeTab.value.viewerGroups.length > 0) {
+          // 尋找第一個有活動視圖的群組
+          for (const group of activeTab.value.viewerGroups) {
+            const activeViewerIndex = group.viewers.findIndex(viewer => viewer.props && viewer.props.isActive);
+            if (activeViewerIndex !== -1) {
+              // 找到活動視圖
+              activeGroupInfo.value = {
+                groupId: group.id,
+                viewerIndex: activeViewerIndex,
+                viewerId: group.viewers[activeViewerIndex].id,
+                viewerComponent: group.viewers[activeViewerIndex].component
+              };
+              break;
+            }
+          }
+          
+          // 如果沒有找到活動視圖，設置第一個群組的第一個視圖為活動
+          if (!activeGroupInfo.value) {
+            const firstGroup = activeTab.value.viewerGroups[0];
+            if (firstGroup.viewers.length > 0) {
+              activeGroupInfo.value = {
+                groupId: firstGroup.id,
+                viewerIndex: 0,
+                viewerId: firstGroup.viewers[0].id,
+                viewerComponent: firstGroup.viewers[0].component
+              };
+            }
           }
         }
       }
@@ -906,30 +697,12 @@ export default defineComponent({
       activeTabId,
       activeTab,
       activeViewer,
-      selectedFileId,
-      availableFiles,
       activeTabColormap,
       activeTabZScale,
-      parametersToDisplay,
       showFileSelector,
       showToolsPanel,
       
-      // 影像處理
-      fineTuneTilt,
-      
-      // 剖面相關
-      lineProfileMode,
-      isDrawingLine,
-      lineStart,
-      lineEnd,
-      mouseMovePos,
-      profileData,
-      profileImage,
-      profileSettings,
-      
       // 方法
-      toggleFileSelector,
-      toggleToolsPanel,
       switchTab,
       closeTab,
       addTab,
@@ -937,6 +710,7 @@ export default defineComponent({
       loadSelectedFile,
       handleGroupToTab,
       updateActiveTabSettings,
+      handleViewerActivated,
       createLineProfile,
       updateProfile,
       applyFlatten,
@@ -947,52 +721,5 @@ export default defineComponent({
 </script>
 
 <style scoped>
-/* 自定義樣式 */
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  background: #2563eb;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  background: #2563eb;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-/* 側邊面板高度設置 */
-.sidebar-panel {
-  max-height: calc(50vh - 30px);
-  min-height: 200px;
-}
-
-/* 最大高度限制 */
-.max-h-80 {
-  max-height: 20rem;
-}
-
-/* 滾動條樣式 */
-.max-h-80::-webkit-scrollbar {
-  width: 6px;
-}
-
-.max-h-80::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.max-h-80::-webkit-scrollbar-thumb {
-  background: #ddd;
-  border-radius: 3px;
-}
-
-.max-h-80::-webkit-scrollbar-thumb:hover {
-  background: #ccc;
-}
+/* 可以添加一些自定義樣式 */
 </style>

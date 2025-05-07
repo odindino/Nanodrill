@@ -1,5 +1,4 @@
-// src/components/analysis/ProfileViewer.vue 修改
-
+<!-- src/components/analysis/ProfileViewer.vue -->
 <template>
   <div class="profile-viewer h-full flex flex-col bg-white rounded-lg overflow-hidden"
        :class="{ 'ring-2 ring-primary': isActive }"
@@ -48,17 +47,7 @@
       </div>
       
       <!-- Plotly 剖面圖 -->
-      <div v-else-if="profileData" class="h-full w-full" ref="plotlyContainer"></div>
-      
-      <!-- 無數據提示 -->
-      <div v-else class="absolute inset-0 flex items-center justify-center bg-gray-50">
-        <div class="text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          <span class="text-sm text-gray-500">尚未生成剖面圖</span>
-        </div>
-      </div>
+      <div class="h-full w-full" ref="plotlyContainer"></div>
     </div>
     
     <!-- 統計信息面板 -->
@@ -193,11 +182,26 @@ export default defineComponent({
       showSettings.value = !showSettings.value;
     };
     
+    // 創建默認的剖面數據
+    const createDefaultProfileData = () => {
+      // 創建一個簡單的水平線 (10 個點)
+      const distance = Array.from({ length: 10 }, (_, i) => i);
+      const height = Array.from({ length: 10 }, () => 0);
+      
+      return {
+        distance,
+        height
+      };
+    };
+    
     // 創建 Plotly 剖面圖
     const createPlotlyChart = () => {
-      if (!props.profileData || !plotlyContainer.value) return;
+      if (!plotlyContainer.value) return;
       
-      const { distance, height } = props.profileData;
+      // 決定使用實際數據還是默認數據
+      const { distance, height } = props.profileData || createDefaultProfileData();
+      
+      console.log('創建剖面圖，數據點數:', distance.length);
       
       // 準備數據
       const data = [{
@@ -234,12 +238,6 @@ export default defineComponent({
         }
       }
       
-      // 計算統計數據
-      const min = Math.min(...height);
-      const max = Math.max(...height);
-      const range = max - min;
-      const mean = height.reduce((a, b) => a + b, 0) / height.length;
-      
       // 設置布局
       const layout = {
         title: '',
@@ -249,7 +247,8 @@ export default defineComponent({
           gridcolor: '#e5e5e5',
           gridwidth: 1,
           linewidth: 2,
-          linecolor: 'black'
+          linecolor: 'black',
+          zeroline: false
         },
         yaxis: {
           title: `Height (${props.physUnit})`,
@@ -257,7 +256,8 @@ export default defineComponent({
           gridcolor: '#e5e5e5',
           gridwidth: 1,
           linewidth: 2,
-          linecolor: 'black'
+          linecolor: 'black',
+          zeroline: false
         },
         margin: { l: 60, r: 30, t: 30, b: 60 },
         showlegend: false,
@@ -266,36 +266,17 @@ export default defineComponent({
         autosize: true
       };
       
-      // 如果不是自動縮放，設置固定的y軸範圍
-      if (!autoScale.value) {
-        layout.yaxis.range = [min - range * 0.05, max + range * 0.05];
-      }
-      
-      // 如果將最小值歸零
-      if (shiftZero.value) {
-        const shiftedHeight = height.map(h => h - min);
-        data[0].y = shiftedHeight;
-        
-        // 同時調整峰值的高度
-        if (data.length > 1) {
-          data[1].y = data[1].y.map(h => h - min);
-        }
-        
-        // 調整y軸範圍
-        if (!autoScale.value) {
-          layout.yaxis.range = [0, range * 1.05];
-        }
-      }
-      
       // 設置配置
       const config = {
         responsive: true,
         displayModeBar: true,
         modeBarButtonsToRemove: [
-          'toImage', 'sendDataToCloud', 'editInChartStudio'
+          'sendDataToCloud', 'editInChartStudio'
         ],
         displaylogo: false
       };
+      
+      console.log('創建Plotly圖表');
       
       // 創建圖表
       Plotly.newPlot(plotlyContainer.value, data, layout, config);
@@ -337,11 +318,13 @@ export default defineComponent({
     
     // 監視剖面數據變化
     watch(() => props.profileData, () => {
+      console.log('profileData變更，更新圖表');
       updateProfileChart();
     }, { deep: true });
     
     // 監視設置變化
     watch([shiftZero, autoScale, showPeaks, peakSensitivity], () => {
+      console.log('設置變更，更新圖表');
       updateProfileChart();
       
       // 發送設置更新事件
@@ -355,9 +338,8 @@ export default defineComponent({
     
     // 組件掛載時創建圖表
     onMounted(() => {
-      if (props.profileData) {
-        createPlotlyChart();
-      }
+      console.log('ProfileViewer掛載');
+      createPlotlyChart();
     });
     
     return {
@@ -375,3 +357,11 @@ export default defineComponent({
   }
 });
 </script>
+
+<style scoped>
+/* 自定義樣式 */
+.profile-viewer {
+  /* 確保完整高度 */
+  height: 100%;
+}
+</style>
