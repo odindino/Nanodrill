@@ -29,106 +29,13 @@
     </div>
     
     <!-- 工具列內容 -->
-    <div v-if="showToolsPanel" class="flex-grow overflow-y-auto p-4">
+    <div v-if="showToolsPanel" class="flex-grow overflow-y-auto">
       <template v-if="activeViewer">
-        <div v-if="activeViewer.component === 'ImageViewer'" class="space-y-4">
-          <h4 class="font-medium text-sm border-b pb-2 mb-2">影像處理</h4>
-          
-          <!-- 色彩映射 -->
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">色彩映射</label>
-            <select 
-              v-model="colormap" 
-              class="w-full text-sm border border-gray-300 rounded py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-              @change="updateImageSettings"
-            >
-              <option value="viridis">Viridis</option>
-              <option value="plasma">Plasma</option>
-              <option value="inferno">Inferno</option>
-              <option value="magma">Magma</option>
-              <option value="cividis">Cividis</option>
-              <option value="Oranges">Oranges</option>
-              <option value="hot">Hot</option>
-              <option value="cool">Cool</option>
-              <option value="jet">Jet</option>
-            </select>
-          </div>
-          
-          <!-- 高度縮放 -->
-          <div>
-            <div class="flex justify-between mb-1">
-              <label class="text-xs text-gray-500">高度縮放</label>
-              <span class="text-xs text-gray-500">{{ zScale.toFixed(1) }}x</span>
-            </div>
-            <input 
-              type="range" 
-              v-model="zScale" 
-              min="0.1" 
-              max="5" 
-              step="0.1" 
-              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              @change="updateImageSettings"
-            >
-          </div>
-          
-          <!-- 剖面分析 -->
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">剖面分析</label>
-            <button 
-              @click="createLineProfile"
-              class="w-full py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              建立線性剖面
-            </button>
-          </div>
-        </div>
-        
-        <!-- 剖面視圖工具 -->
-        <div v-else-if="activeViewer.component === 'ProfileViewer'" class="space-y-4">
-          <h4 class="font-medium text-sm border-b pb-2 mb-2">剖面設定</h4>
-          
-          <!-- 將最小值歸零選項 -->
-          <div class="flex items-center">
-            <input 
-              type="checkbox" 
-              id="shift-zero" 
-              v-model="shiftZero"
-              class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-              @change="updateProfileSettings"
-            >
-            <label for="shift-zero" class="ml-2 text-sm text-gray-700">
-              將最小值歸零
-            </label>
-          </div>
-          
-          <!-- 自動縮放選項 -->
-          <div class="flex items-center">
-            <input 
-              type="checkbox" 
-              id="auto-scale" 
-              v-model="autoScale"
-              class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-              @change="updateProfileSettings"
-            >
-            <label for="auto-scale" class="ml-2 text-sm text-gray-700">
-              自動縮放
-            </label>
-          </div>
-          
-          <!-- 測量新剖面按鈕 -->
-          <div v-if="activeViewer.props && activeViewer.props.sourceViewerId">
-            <button 
-              @click="measureNewProfile"
-              class="w-full py-2 px-3 text-sm font-medium rounded bg-blue-100 text-blue-700 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
-            >
-              在來源圖像上測量新剖面
-            </button>
-          </div>
-        </div>
-        
-        <div v-else class="p-4 text-center text-gray-500">
-          <p>無可用工具</p>
-        </div>
+        <!-- 根據 Viewer 類型載入對應的工具面板 -->
+        <component 
+          :is="getToolsComponent(activeViewer.component)"
+          :viewer="activeViewer"
+        />
       </template>
       
       <div v-else class="p-4 text-center text-gray-500">
@@ -147,25 +54,23 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch } from 'vue';
+import { defineComponent, ref, computed } from 'vue';
 import { useAnalysisStore } from '../../stores/analysisStore';
 import { useSpmDataStore } from '../../stores/spmDataStore';
+import ImageViewerTools from './tools/ImageViewerTools.vue';
+import ProfileViewerTools from './tools/ProfileViewerTools.vue';
 
 export default defineComponent({
   name: 'ToolsPanel',
+  components: {
+    ImageViewerTools,
+    ProfileViewerTools
+  },
   setup() {
     const analysisStore = useAnalysisStore();
     const spmDataStore = useSpmDataStore();
     
     const showToolsPanel = ref(true);
-    
-    // 圖像工具設置
-    const colormap = ref('Oranges');
-    const zScale = ref(1.0);
-    
-    // 剖面工具設置
-    const shiftZero = ref(false);
-    const autoScale = ref(true);
     
     // 獲取當前活動的視圖
     const activeViewer = computed(() => {
@@ -192,250 +97,25 @@ export default defineComponent({
       showToolsPanel.value = !showToolsPanel.value;
     };
     
-    // 更新圖像設置
-    const updateImageSettings = () => {
-      if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
-      
-      const viewerId = activeViewer.value.id;
-      const location = spmDataStore.getViewerLocation(viewerId);
-      
-      if (location) {
-        // 找到標籤頁和群組
-        const tab = spmDataStore.analysisTabs.find(t => t.id === location.tabId);
-        if (tab && tab.viewerGroups) {
-          // 更新視圖屬性
-          const updatedGroups = [...tab.viewerGroups];
-          const group = updatedGroups.find(g => g.id === location.groupId);
-          
-          if (group) {
-            const updatedViewers = [...group.viewers];
-            updatedViewers[location.viewerIndex] = {
-              ...updatedViewers[location.viewerIndex],
-              props: {
-                ...updatedViewers[location.viewerIndex].props,
-                colormap: colormap.value,
-                zScale: zScale.value
-              }
-            };
-            
-            // 更新群組
-            const groupIndex = updatedGroups.indexOf(group);
-            updatedGroups[groupIndex] = {
-              ...group,
-              viewers: updatedViewers
-            };
-            
-            // 更新標籤頁
-            spmDataStore.updateAnalysisTabData(location.tabId, {
-              viewerGroups: updatedGroups
-            });
-          }
-        }
+    // 根據 Viewer 類型獲取對應的工具組件
+    const getToolsComponent = (viewerType: string) => {
+      switch (viewerType) {
+        case 'ImageViewer':
+          return 'ImageViewerTools';
+        case 'ProfileViewer':
+          return 'ProfileViewerTools';
+        default:
+          return null;
       }
     };
     
-    // 更新剖面圖設置
-    const updateProfileSettings = () => {
-      if (!activeViewer.value || activeViewer.value.component !== 'ProfileViewer') return;
-      
-      const viewerId = activeViewer.value.id;
-      const location = spmDataStore.getViewerLocation(viewerId);
-      
-      if (location) {
-        // 找到標籤頁和群組
-        const tab = spmDataStore.analysisTabs.find(t => t.id === location.tabId);
-        if (tab && tab.viewerGroups) {
-          // 更新視圖屬性
-          const updatedGroups = [...tab.viewerGroups];
-          const group = updatedGroups.find(g => g.id === location.groupId);
-          
-          if (group) {
-            const updatedViewers = [...group.viewers];
-            updatedViewers[location.viewerIndex] = {
-              ...updatedViewers[location.viewerIndex],
-              props: {
-                ...updatedViewers[location.viewerIndex].props,
-                shiftZero: shiftZero.value,
-                autoScale: autoScale.value
-              }
-            };
-            
-            // 更新群組
-            const groupIndex = updatedGroups.indexOf(group);
-            updatedGroups[groupIndex] = {
-              ...group,
-              viewers: updatedViewers
-            };
-            
-            // 更新標籤頁
-            spmDataStore.updateAnalysisTabData(location.tabId, {
-              viewerGroups: updatedGroups
-            });
-          }
-        }
-      }
-    };
     
-    // 建立線性剖面
-    const createLineProfile = () => {
-      if (!activeViewer.value || activeViewer.value.component !== 'ImageViewer') return;
-      
-      const sourceViewerId = activeViewer.value.id;
-      const location = spmDataStore.getViewerLocation(sourceViewerId);
-      
-      if (!location) return;
-      
-      // 創建新的 ProfileViewer
-      const profileViewerId = `viewer-profile-${Date.now()}`;
-      const profileViewer = {
-        id: profileViewerId,
-        component: 'ProfileViewer',
-        props: {
-          id: profileViewerId,
-          title: '線性剖面',
-          physUnit: activeViewer.value.props.physUnit || 'nm',
-          isActive: true,
-          showStats: true,
-          sourceViewerId: sourceViewerId,
-          sourceViewerTitle: activeViewer.value.props.title || 'Image'
-        }
-      };
-      
-      // 找到標籤頁和群組
-      const tab = spmDataStore.analysisTabs.find(t => t.id === location.tabId);
-      if (tab && tab.viewerGroups) {
-        const group = tab.viewerGroups.find(g => g.id === location.groupId);
-        
-        if (group) {
-          // 將所有視圖設為非活動
-          const updatedViewers = group.viewers.map(viewer => ({
-            ...viewer,
-            props: {
-              ...viewer.props,
-              isActive: false
-            }
-          }));
-          
-          // 添加新的剖面視圖
-          updatedViewers.push(profileViewer);
-          
-          // 更新標籤頁
-          const updatedGroups = [...tab.viewerGroups];
-          const groupIndex = updatedGroups.indexOf(group);
-          
-          updatedGroups[groupIndex] = {
-            ...group,
-            viewers: updatedViewers
-          };
-          
-          spmDataStore.updateAnalysisTabData(tab.id, {
-            viewerGroups: updatedGroups
-          });
-          
-          // 更新活動視圖
-          analysisStore.setActiveViewer(profileViewerId);
-          
-          // 開始測量模式
-          analysisStore.toggleMeasureMode();
-          
-          // 更新圖像視圖的測量模式
-          updateImageViewerMeasureMode(sourceViewerId, true, profileViewerId);
-        }
-      }
-    };
-    
-    // 測量新剖面
-    const measureNewProfile = () => {
-      if (!activeViewer.value || activeViewer.value.component !== 'ProfileViewer' || !activeViewer.value.props.sourceViewerId) return;
-      
-      const sourceViewerId = activeViewer.value.props.sourceViewerId;
-      const profileViewerId = activeViewer.value.id;
-      
-      // 開始測量模式
-      analysisStore.toggleMeasureMode();
-      
-      // 更新圖像視圖的測量模式
-      updateImageViewerMeasureMode(sourceViewerId, true, profileViewerId);
-      
-      // 激活源圖像視圖
-      analysisStore.setActiveViewer(sourceViewerId);
-    };
-    
-    // 更新圖像視圖的測量模式
-    const updateImageViewerMeasureMode = (viewerId: string, mode: boolean, targetProfileViewerId: string | null = null) => {
-      const location = spmDataStore.getViewerLocation(viewerId);
-      
-      if (!location) return;
-      
-      // 找到標籤頁和群組
-      const tab = spmDataStore.analysisTabs.find(t => t.id === location.tabId);
-      if (tab && tab.viewerGroups) {
-        // 更新視圖屬性
-        const updatedGroups = [...tab.viewerGroups];
-        const group = updatedGroups.find(g => g.id === location.groupId);
-        
-        if (group) {
-          const updatedViewers = [...group.viewers];
-          updatedViewers[location.viewerIndex] = {
-            ...updatedViewers[location.viewerIndex],
-            props: {
-              ...updatedViewers[location.viewerIndex].props,
-              profileMeasureMode: mode,
-              targetProfileViewer: mode && targetProfileViewerId ? {
-                id: targetProfileViewerId
-              } : null
-            }
-          };
-          
-          // 更新群組
-          const groupIndex = updatedGroups.indexOf(group);
-          updatedGroups[groupIndex] = {
-            ...group,
-            viewers: updatedViewers
-          };
-          
-          // 更新標籤頁
-          spmDataStore.updateAnalysisTabData(location.tabId, {
-            viewerGroups: updatedGroups
-          });
-        }
-      }
-    };
-    
-    // 當活動視圖變化時，更新工具設置
-    watch(() => activeViewer.value, (newViewer) => {
-      if (newViewer) {
-        // 根據視圖類型更新工具設置
-        if (newViewer.component === 'ImageViewer') {
-          colormap.value = newViewer.props.colormap || 'Oranges';
-          zScale.value = newViewer.props.zScale || 1.0;
-        } else if (newViewer.component === 'ProfileViewer') {
-          shiftZero.value = newViewer.props.shiftZero || false;
-          autoScale.value = newViewer.props.autoScale !== undefined ? newViewer.props.autoScale : true;
-        }
-      }
-    }, { immediate: true });
-    
-    // 監聽測量模式變化
-    watch(() => analysisStore.measureMode, (newMode) => {
-      // 測量模式關閉時，更新所有ImageViewer
-      if (!newMode) {
-        analysisStore.updateAllImageViewersMeasureMode(false);
-      }
-    });
     
     return {
       showToolsPanel,
       activeViewer,
-      colormap,
-      zScale,
-      shiftZero,
-      autoScale,
       toggleToolsPanel,
-      updateImageSettings,
-      updateProfileSettings,
-      createLineProfile,
-      measureNewProfile
+      getToolsComponent,
     };
   }
 });
@@ -446,24 +126,5 @@ export default defineComponent({
 .sidebar-panel {
   max-height: calc(50vh - 30px);
   min-height: 200px;
-}
-
-/* 自定義範圍輸入滑塊 */
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  background: #2563eb;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: #2563eb;
-  border-radius: 50%;
-  cursor: pointer;
 }
 </style>
