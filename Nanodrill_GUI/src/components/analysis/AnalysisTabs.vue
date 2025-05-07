@@ -101,6 +101,7 @@ export default defineComponent({
   },
   setup() {
     const spmDataStore = useSpmDataStore();
+    // 獲取 analysisStore 實例
     const analysisStore = useAnalysisStore();
     
     // 從 store 獲取狀態
@@ -146,6 +147,66 @@ export default defineComponent({
       analysisStore.setActiveGroup(groupId);
     };
     
+    // 處理視圖移除 - 使用直接調用的方式
+    const handleViewerRemoved = (data: { groupId: string, viewerIndex: number, viewerId: string }) => {
+      console.log("移除視圖:", data.viewerId);
+      
+      // 使用直接的函數調用，而不是通過 Store 調用
+      removeViewerDirectly(data.viewerId);
+    };
+    
+    // 直接實現視圖移除邏輯，不依賴 Store 的方法
+    const removeViewerDirectly = (viewerId: string) => {
+      console.log("直接執行移除視圖:", viewerId);
+      
+      // 獲取視圖位置
+      const location = spmDataStore.getViewerLocation(viewerId);
+      if (!location) return;
+      
+      const { tabId, groupId, viewerIndex } = location;
+      const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
+      
+      if (!tab || !tab.viewerGroups) return;
+      
+      const groupIndex = tab.viewerGroups.findIndex(g => g.id === groupId);
+      if (groupIndex === -1) return;
+      
+      const group = tab.viewerGroups[groupIndex];
+      
+      // 如果是群組中的最後一個視圖，直接移除整個群組
+      if (group.viewers.length === 1) {
+        const updatedGroups = tab.viewerGroups.filter(g => g.id !== groupId);
+        spmDataStore.updateAnalysisTabData(tabId, {
+          viewerGroups: updatedGroups
+        });
+        
+        // 更新活動群組和視圖ID
+        if (analysisStore.activeGroupId === groupId) {
+          analysisStore.activeGroupId = updatedGroups.length > 0 ? updatedGroups[0].id : '';
+          analysisStore.activeViewerId = '';
+        }
+      } else {
+        // 否則只移除該視圖
+        const updatedViewers = [...group.viewers];
+        updatedViewers.splice(viewerIndex, 1);
+        
+        const updatedGroups = [...tab.viewerGroups];
+        updatedGroups[groupIndex] = {
+          ...group,
+          viewers: updatedViewers
+        };
+        
+        spmDataStore.updateAnalysisTabData(tabId, {
+          viewerGroups: updatedGroups
+        });
+        
+        // 更新活動視圖ID
+        if (analysisStore.activeViewerId === viewerId) {
+          analysisStore.activeViewerId = updatedViewers.length > 0 ? updatedViewers[0].id : '';
+        }
+      }
+    };
+    
     return {
       tabs,
       activeTabId,
@@ -154,7 +215,8 @@ export default defineComponent({
       closeTab,
       addNewTab,
       isGroupActive,
-      activateGroup
+      activateGroup,
+      handleViewerRemoved
     };
   }
 });

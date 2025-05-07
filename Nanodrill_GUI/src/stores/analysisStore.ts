@@ -353,7 +353,9 @@ export const useAnalysisStore = defineStore('analysis', {
       this.errorMessage = '';
     },
 
-    // 創建新的視圖群組
+    /**
+     * 創建新的視圖群組
+     */
     createNewViewerGroup(tabId: string, title: string, viewers: any[] = []) {
       const spmDataStore = useSpmDataStore();
       
@@ -391,7 +393,9 @@ export const useAnalysisStore = defineStore('analysis', {
       return groupId;
     },
 
-    // 將視圖添加到群組或創建新群組
+    /**
+     * 將視圖添加到群組或創建新群組
+     */
     addViewerToGroupOrCreate(tabId: string, groupId: string | null, viewer: any) {
       const spmDataStore = useSpmDataStore();
       
@@ -438,7 +442,9 @@ export const useAnalysisStore = defineStore('analysis', {
       }
     },
 
-    // 創建線性剖面視圖
+    /**
+     * 創建線性剖面視圖
+     */
     async createLineProfile(sourceViewerId: string, targetProfileViewer: any = null) {
       // 首先找到源視圖所在的標籤頁和群組
       const spmDataStore = useSpmDataStore();
@@ -523,7 +529,9 @@ export const useAnalysisStore = defineStore('analysis', {
       return profileViewerId;
     },
 
-    // 更新特定圖像視圖的測量模式
+    /**
+     * 更新特定圖像視圖的測量模式
+     */
     updateImageViewerMeasureMode(sourceViewerId: string, profileViewerId: string) {
       const spmDataStore = useSpmDataStore();
       
@@ -573,6 +581,60 @@ export const useAnalysisStore = defineStore('analysis', {
         }
       }
     },
+
+    /**
+     * 移除視圖
+     */
+    removeViewer(viewerId: string) {
+      console.log("執行移除視圖:", viewerId);
+      // 確保 spmDataStore 是新的實例
+      const spmDataStore = useSpmDataStore();
+      const location = spmDataStore.getViewerLocation(viewerId);
+      
+      if (!location) return;
+      
+      const { tabId, groupId, viewerIndex } = location;
+      const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
+      
+      if (!tab || !tab.viewerGroups) return;
+      
+      const groupIndex = tab.viewerGroups.findIndex(g => g.id === groupId);
+      if (groupIndex === -1) return;
+      
+      const group = tab.viewerGroups[groupIndex];
+      
+      // 如果是群組中的最後一個視圖，直接移除整個群組
+      if (group.viewers.length === 1) {
+        const updatedGroups = tab.viewerGroups.filter(g => g.id !== groupId);
+        spmDataStore.updateAnalysisTabData(tabId, {
+          viewerGroups: updatedGroups
+        });
+        
+        // 更新活動群組和視圖ID
+        if (this.activeGroupId === groupId) {
+          this.activeGroupId = updatedGroups.length > 0 ? updatedGroups[0].id : '';
+          this.activeViewerId = '';
+        }
+      } else {
+        // 否則只移除該視圖
+        const updatedViewers = [...group.viewers];
+        updatedViewers.splice(viewerIndex, 1);
+        
+        const updatedGroups = [...tab.viewerGroups];
+        updatedGroups[groupIndex] = {
+          ...group,
+          viewers: updatedViewers
+        };
+        
+        spmDataStore.updateAnalysisTabData(tabId, {
+          viewerGroups: updatedGroups
+        });
+        
+        // 更新活動視圖ID
+        if (this.activeViewerId === viewerId) {
+          this.activeViewerId = updatedViewers.length > 0 ? updatedViewers[0].id : '';
+        }
+      }
+    }
   }
-  
 });

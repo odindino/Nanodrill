@@ -183,6 +183,7 @@ export default defineComponent({
       if (index < 0 || index >= limitedViewers.value.length) return;
       
       const viewerId = limitedViewers.value[index].id;
+      console.log("發送移除視圖事件:", { groupId: props.id, viewerIndex: index, viewerId });
       
       // 發送事件通知父組件處理移除邏輯
       emit('viewer-removed', { groupId: props.id, viewerIndex: index, viewerId });
