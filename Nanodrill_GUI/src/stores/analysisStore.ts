@@ -282,7 +282,6 @@ export const useAnalysisStore = defineStore('analysis', {
      */
     setActiveViewer(viewerId: string) {
       this.activeViewerId = viewerId;
-      console.log('分析存儲中設置活動視圖:', viewerId);
     },
     
     /**

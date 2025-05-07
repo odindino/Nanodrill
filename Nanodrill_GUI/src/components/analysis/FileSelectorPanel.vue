@@ -117,6 +117,7 @@ export default defineComponent({
       
       // 設置分析 store 中的活動標籤頁
       analysisStore.activeTabId = activeTabId.value;
+
       
       // 選擇文件
       analysisStore.selectFile(selectedFileId.value, getFileName(selectedFileId.value));

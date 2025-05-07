@@ -4,11 +4,6 @@
     class="sidebar-panel bg-white border-r border-gray-200 transition-all duration-300 flex flex-col mt-2"
     :class="showToolsPanel ? 'w-80' : 'w-12'"
   >
-    <!-- 調試信息，在開發階段使用 -->
-    <div v-if="activeViewer" class="p-2 bg-gray-100 text-xs border-t border-gray-200">
-      <div class="font-medium">當前視圖: {{ activeViewer.component }}</div>
-      <div>ID: {{ activeViewer.id }}</div>
-    </div>
     <!-- 標題或迷你按鈕 -->
     <div 
       class="flex items-center p-2 border-b border-gray-200 bg-gray-50"
@@ -152,7 +147,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, onMounted } from 'vue';
+import { defineComponent, ref, computed, watch } from 'vue';
 import { useAnalysisStore } from '../../stores/analysisStore';
 import { useSpmDataStore } from '../../stores/spmDataStore';
 
@@ -175,8 +170,6 @@ export default defineComponent({
     // 獲取當前活動的視圖
     const activeViewer = computed(() => {
       const viewerId = analysisStore.activeViewerId;
-      console.log('當前活動視圖 ID:', viewerId); // 添加這行調試日誌
-      
       if (!viewerId) return null;
       
       // 查找擁有該視圖的標籤頁和群組
@@ -185,7 +178,6 @@ export default defineComponent({
           for (const group of tab.viewerGroups) {
             const viewer = group.viewers.find(v => v.id === viewerId);
             if (viewer) {
-              console.log('找到活動視圖:', viewer.component); // 添加這行調試日誌
               return viewer;
             }
           }
@@ -429,32 +421,6 @@ export default defineComponent({
       // 測量模式關閉時，更新所有ImageViewer
       if (!newMode) {
         analysisStore.updateAllImageViewersMeasureMode(false);
-      }
-    });
-
-    // 確保在組件初始化時獲取當前活動視圖
-    onMounted(() => {
-      // 主動獲取一次當前活動視圖
-      const viewerId = analysisStore.activeViewerId;
-      if (viewerId) {
-        for (const tab of spmDataStore.analysisTabs) {
-          if (tab.viewerGroups) {
-            for (const group of tab.viewerGroups) {
-              const viewer = group.viewers.find(v => v.id === viewerId);
-              if (viewer) {
-                // 手動觸發 activeViewer 的更新
-                if (viewer.component === 'ImageViewer') {
-                  colormap.value = viewer.props.colormap || 'Oranges';
-                  zScale.value = viewer.props.zScale || 1.0;
-                } else if (viewer.component === 'ProfileViewer') {
-                  shiftZero.value = viewer.props.shiftZero || false;
-                  autoScale.value = viewer.props.autoScale !== undefined ? viewer.props.autoScale : true;
-                }
-                break;
-              }
-            }
-          }
-        }
       }
     });
     
