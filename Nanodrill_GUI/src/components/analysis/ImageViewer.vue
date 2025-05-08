@@ -36,14 +36,19 @@
       <div v-if="imageRawData" 
           ref="plotlyContainer" 
           class="w-full h-full"
-          :class="{'profile-measure-mode': profileMeasureMode}"
-          @click="handlePlotClick"
-          @mousedown.stop
-          @mouseup.stop>
+          :class="{'profile-measure-mode': profileMeasureMode}">
+      </div>
+      
+      <!-- 測量狀態提示 -->
+      <div v-if="profileMeasureMode" class="absolute top-2 left-2 right-2 bg-blue-100 text-blue-800 text-xs p-2 rounded-md shadow-sm border border-blue-200 z-10">
+        {{ measureStateText }}
+        <span v-if="!lineProfileStore.inPlotArea" class="block mt-1 text-red-500">
+          滑鼠不在圖表區域內，請移回圖表
+        </span>
       </div>
       
       <!-- 無圖像數據提示 -->
-      <div v-else class="absolute inset-0 flex items-center justify-center bg-gray-50">
+      <div v-else-if="!imageRawData" class="absolute inset-0 flex items-center justify-center bg-gray-50">
         <div class="text-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -74,9 +79,11 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, onMounted } from 'vue';
+import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import type { PropType } from 'vue';
 import Plotly from 'plotly.js-dist-min';
+import { useLineProfileStateStore, LineProfileState } from '../../stores/lineProfileStateStore';
+import type { Point, HoverData } from '../../stores/lineProfileStateStore';
 
 // 定義統計信息介面
 interface ImageStats {
@@ -94,12 +101,6 @@ interface Dimensions {
   height: number;
   xRange: number;
   yRange: number;
-}
-
-// 定義位置點介面
-interface Point {
-  x: number;
-  y: number;
 }
 
 // 定義目標剖面視圖接口
@@ -185,10 +186,27 @@ export default defineComponent({
   },
   emits: ['update:colormap', 'update:zScale', 'line-profile', 'close', 'click', 'measure-completed'],
   setup(props, { emit }) {
+    // 使用 LineProfileStateStore
+    const lineProfileStore = useLineProfileStateStore();
+    
     // 圖像容器引用
     const imageContainer = ref<HTMLElement | null>(null);
     const plotlyContainer = ref<HTMLElement | null>(null);
     let plotlyInstance: any = null;
+    
+    // 線條繪製相關變量
+    let followingLineIndex: number | null = null;
+    let pointMarkerIndices: number[] = [];
+    let finalLineIndex: number | null = null;
+    
+    // 測量狀態提示消息
+    const measureStateText = computed(() => {
+      if (!props.profileMeasureMode) {
+        return '';
+      }
+      
+      return lineProfileStore.measureStateText;
+    });
     
     // 格式化數字，保留2位小數
     const formatNumber = (value: number) => {
@@ -223,37 +241,22 @@ export default defineComponent({
       }
     };
     
-    
-    
     /**
-     * 獲取物理座標
-     * @param point 點擊點相對於容器的坐標
-     * @param plotlyRect 容器的 DOMRect
-     * @returns 物理坐標
+     * 從物理坐標獲取像素坐標
      */
-    const getPhysicalCoordinates = (point: { x: number, y: number }, plotlyRect: DOMRect) => {
+    const getPixelCoordinates = (point: Point) => {
       const { width, height, xRange, yRange } = props.dimensions;
       
-      // 計算點在圖像上的相對位置
-      const relX = point.x / plotlyRect.width;
-      const relY = 1 - (point.y / plotlyRect.height); // Y軸翻轉，原點在左下角
+      // 計算相對位置
+      const relX = point.x / xRange;
+      const relY = point.y / yRange;
       
-      // 計算物理座標
-      const physX = relX * xRange;
-      const physY = relY * yRange;
-      
-      // 計算像素座標
+      // 計算像素坐標
       const pixelX = Math.floor(relX * width);
-      const pixelY = Math.floor((1 - relY) * height); // 翻轉回來，原點在左上角
+      const pixelY = Math.floor((1 - relY) * height); // Y軸原點在左上角，需要翻轉
       
-      return {
-        physicalX: physX,
-        physicalY: physY,
-        pixelX,
-        pixelY
-      };
+      return { x: pixelX, y: pixelY };
     };
-    
     
     // 創建 Plotly 圖表
     const createPlotlyChart = () => {
@@ -273,7 +276,8 @@ export default defineComponent({
         type: 'heatmap',
         colorscale: props.colormap || 'Oranges',
         showscale: true,
-        zauto: true
+        zauto: true,
+        hoverinfo: props.profileMeasureMode ? 'x+y+z' : 'all'
       }];
       
       // 準備布局
@@ -327,25 +331,13 @@ export default defineComponent({
       Plotly.newPlot(plotlyContainer.value, data, layout, config);
       plotlyInstance = plotlyContainer.value;
       
-      // 如果在測量模式下，禁用 Plotly 的默認交互
+      // 初始化測量狀態
       if (props.profileMeasureMode) {
-        Plotly.relayout(plotlyContainer.value, {
-          'dragmode': false,
-          'hovermode': false,
-          'clickmode': 'none'
-        });
+        initMeasureMode();
       }
       
-      // 添加 Plotly 事件監聽，覆蓋默認行為
-      if (plotlyInstance) {
-        plotlyInstance.on('plotly_click', function(data) {
-          if (props.profileMeasureMode) {
-            // 阻止默認行為
-            return false;
-          }
-        });
-      }
-
+      // 添加 Plotly 事件處理
+      setupPlotlyEvents();
     };
     
     // 更新 Plotly 圖表
@@ -359,6 +351,7 @@ export default defineComponent({
       });
     };
 
+    // 處理點擊事件 (組件整體)
     const handleClick = (event: MouseEvent) => {
       // 確保 event 是有效的
       if (event) {
@@ -371,90 +364,224 @@ export default defineComponent({
       }
     };
 
-    // 測量點處理
-    const measurePoints = ref<Point[]>([]);
-
-    // 處理圖表點擊
-    const handlePlotClick = (event: MouseEvent) => {
-      // 確保 event 是有效的
-      if (event) {
-        event.stopPropagation();
-      }
-      
-      // 如果不在測量模式或沒有 Plotly 容器，直接返回
-      if (!props.profileMeasureMode || !plotlyContainer.value) {
-        return;
-      }
-      
-      // 獲取點擊位置相對於 Plotly 容器的坐標
-      const rect = plotlyContainer.value.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      
-      // 計算物理坐標
-      const physCoords = getPhysicalCoordinates({x, y}, rect);
-      
-      // 在 Plotly 上標記點
-      markPointOnPlot(physCoords);
-      
-      // 保存測量點
-      measurePoints.value.push({
-        x: physCoords.physicalX,
-        y: physCoords.physicalY
-      });
-      
-      // 如果已經有兩個點，則計算並繪製剖面線
-      if (measurePoints.value.length === 2) {
-        drawProfileLine();
-        // 發送測量完成事件
-        emitMeasureCompleted();
-        // 清空測量點，準備下一次測量
-        measurePoints.value = [];
-      }
-    };
-
     /**
-     * 在 Plotly 圖表上標記點
-     * @param coords 物理坐標
+     * 設置 Plotly 事件處理
      */
-    const markPointOnPlot = (coords: { physicalX: number, physicalY: number }) => {
+    const setupPlotlyEvents = () => {
       if (!plotlyInstance) return;
       
-      // 創建標記數據
+      // 監聽 hover 事件
+      plotlyInstance.on('plotly_hover', handlePlotlyHover);
+      
+      // 監聽 unhover 事件
+      plotlyInstance.on('plotly_unhover', handlePlotlyUnhover);
+      
+      // 監聽 click 事件
+      plotlyInstance.on('plotly_click', handlePlotlyClick);
+    };
+    
+    /**
+     * 處理 Plotly hover 事件
+     */
+    const handlePlotlyHover = (data: any) => {
+      if (!props.profileMeasureMode) return;
+      
+      // 設置在圖表區域內
+      lineProfileStore.setInPlotArea(true);
+      
+      // 獲取當前 hover 的點座標
+      if (data && data.points && data.points.length > 0) {
+        const point = data.points[0];
+        const hoverData: HoverData = {
+          x: point.x,
+          y: point.y,
+          z: point.z,
+          curveNumber: point.curveNumber,
+          pointNumber: point.pointNumber,
+          pointIndex: point.pointIndex
+        };
+
+        lineProfileStore.updateHoverData(hoverData);
+      }
+    };
+    
+    /**
+     * 處理 Plotly unhover 事件
+     */
+    const handlePlotlyUnhover = () => {
+      if (!props.profileMeasureMode) return;
+      
+      // 設置離開圖表區域
+      lineProfileStore.setInPlotArea(false);
+      // 保留最後的 hover 數據，不清除
+    };
+    
+    /**
+     * 處理 Plotly click 事件
+     */
+    const handlePlotlyClick = (data: any) => {
+      if (!props.profileMeasureMode) return;
+      
+      // 只有當滑鼠在圖表上時才處理點擊 (通過 hover 狀態檢查)
+      if (!lineProfileStore.inPlotArea || !lineProfileStore.hoverData) return;
+      
+      switch (lineProfileStore.lineProfileMeasureState) {
+        case LineProfileState.IDLE:
+          // 清除現有的線條和點
+          clearAllTraces();
+          
+          // 設置起點
+          lineProfileStore.setStartPoint({
+            x: lineProfileStore.hoverData.x,
+            y: lineProfileStore.hoverData.y,
+            z: lineProfileStore.hoverData.z
+          });
+          
+          // 添加起點標記
+          addPointMarker(lineProfileStore.startPoint!, 'red');
+          break;
+          
+        case LineProfileState.SELECTING_END:
+          // 設置終點
+          lineProfileStore.setEndPoint({
+            x: lineProfileStore.hoverData.x,
+            y: lineProfileStore.hoverData.y,
+            z: lineProfileStore.hoverData.z
+          });
+          
+          // 添加終點標記
+          addPointMarker(lineProfileStore.endPoint!, 'blue');
+          
+          // 繪製最終線條
+          drawFinalLine();
+          
+          // 計算剖面數據
+          calculateProfileData();
+          break;
+          
+        case LineProfileState.COMPLETED:
+          // 清除現有的線條和點
+          clearAllTraces();
+          
+          // 重置測量狀態
+          lineProfileStore.resetMeasurement();
+          
+          // 設置新的起點
+          lineProfileStore.setStartPoint({
+            x: lineProfileStore.hoverData.x,
+            y: lineProfileStore.hoverData.y,
+            z: lineProfileStore.hoverData.z
+          });
+          
+          // 添加起點標記
+          addPointMarker(lineProfileStore.startPoint!, 'red');
+          break;
+      }
+    };
+    
+    /**
+     * 初始化測量模式
+     */
+    const initMeasureMode = () => {
+      // 清除現有的線條和點
+      clearAllTraces();
+      
+      // 重置狀態
+      lineProfileStore.startNewMeasurement(props.id, props.targetProfileViewer?.id || null);
+      
+      // 禁用 Plotly 默認交互
+      disablePlotlyInteractions();
+    };
+    
+    /**
+     * 添加點標記
+     */
+    const addPointMarker = (point: Point, color: string = 'red') => {
+      if (!plotlyInstance) return;
+      
+      // 創建點數據
       const pointData = {
-        x: [coords.physicalX],
-        y: [coords.physicalY],
+        x: [point.x],
+        y: [point.y],
         mode: 'markers',
         type: 'scatter',
         marker: {
           size: 10,
-          color: 'red',
+          color: color,
           symbol: 'circle'
         },
         showlegend: false,
         hoverinfo: 'none'
       };
       
-      // 更新 Plotly 圖表，添加標記
+      // 添加點到圖表
       Plotly.addTraces(plotlyInstance, pointData);
-    };
-
-    /**
-     * 繪製兩點之間的剖面線
-     */
-    const drawProfileLine = () => {
-      if (!plotlyInstance || measurePoints.value.length !== 2) return;
       
-      const [start, end] = measurePoints.value;
+      // 記錄添加的點的索引
+      const newTraceIndex = (plotlyInstance.data || []).length - 1;
+      pointMarkerIndices.push(newTraceIndex);
+    };
+    
+    /**
+     * 更新跟隨滑鼠的線條
+     */
+    const updateFollowingLine = () => {
+      if (!plotlyInstance || !lineProfileStore.startPoint || !lineProfileStore.currentPoint) return;
+      
+      // 移除現有的臨時線條 (如果有)
+      if (followingLineIndex !== null) {
+        Plotly.deleteTraces(plotlyInstance, followingLineIndex);
+        followingLineIndex = null;
+      }
       
       // 創建線數據
       const lineData = {
-        x: [start.x, end.x],
-        y: [start.y, end.y],
+        x: [lineProfileStore.startPoint.x, lineProfileStore.currentPoint.x],
+        y: [lineProfileStore.startPoint.y, lineProfileStore.currentPoint.y],
         mode: 'lines',
         type: 'scatter',
         line: {
           color: 'red',
+          width: 2,
+          dash: 'dot'
+        },
+        showlegend: false,
+        hoverinfo: 'none'
+      };
+      
+      // 添加線到圖表
+      Plotly.addTraces(plotlyInstance, lineData);
+      
+      // 記錄添加的線的索引
+      followingLineIndex = (plotlyInstance.data || []).length - 1;
+    };
+    
+    /**
+     * 繪製最終線條
+     */
+    const drawFinalLine = () => {
+      if (!plotlyInstance || !lineProfileStore.startPoint || !lineProfileStore.endPoint) return;
+      
+      // 移除現有的臨時線條 (如果有)
+      if (followingLineIndex !== null) {
+        Plotly.deleteTraces(plotlyInstance, followingLineIndex);
+        followingLineIndex = null;
+      }
+      
+      // 移除現有的最終線條 (如果有)
+      if (finalLineIndex !== null) {
+        Plotly.deleteTraces(plotlyInstance, finalLineIndex);
+        finalLineIndex = null;
+      }
+      
+      // 創建線數據
+      const lineData = {
+        x: [lineProfileStore.startPoint.x, lineProfileStore.endPoint.x],
+        y: [lineProfileStore.startPoint.y, lineProfileStore.endPoint.y],
+        mode: 'lines',
+        type: 'scatter',
+        line: {
+          color: 'blue',
           width: 2,
           dash: 'solid'
         },
@@ -462,60 +589,131 @@ export default defineComponent({
         hoverinfo: 'none'
       };
       
-      // 更新 Plotly 圖表，添加線
+      // 添加線到圖表
       Plotly.addTraces(plotlyInstance, lineData);
+      
+      // 記錄添加的線的索引
+      finalLineIndex = (plotlyInstance.data || []).length - 1;
     };
-
+    
     /**
-     * 發送測量完成事件
+     * 清除所有繪製的痕跡
      */
-    const emitMeasureCompleted = () => {
-      if (measurePoints.value.length !== 2) return;
+    const clearAllTraces = () => {
+      if (!plotlyInstance) return;
       
-      const [start, end] = measurePoints.value;
+      // 清除臨時線條
+      if (followingLineIndex !== null) {
+        Plotly.deleteTraces(plotlyInstance, followingLineIndex);
+        followingLineIndex = null;
+      }
       
-      // 獲取源圖像數據
-      const sourceData = {
-        imageRawData: props.imageRawData,
-        dimensions: props.dimensions
-      };
+      // 清除最終線條
+      if (finalLineIndex !== null) {
+        Plotly.deleteTraces(plotlyInstance, finalLineIndex);
+        finalLineIndex = null;
+      }
       
-      // 計算開始和結束點的像素坐標
-      const startPixel = getPixelCoordinates(start);
-      const endPixel = getPixelCoordinates(end);
+      // 清除點標記
+      if (pointMarkerIndices.length > 0) {
+        // 需要按降序排列索引，以避免刪除後的索引變化問題
+        const sortedIndices = [...pointMarkerIndices].sort((a, b) => b - a);
+        for (const index of sortedIndices) {
+          Plotly.deleteTraces(plotlyInstance, index);
+        }
+        pointMarkerIndices = [];
+      }
+    };
+    
+    /**
+     * 計算剖面數據
+     */
+    const calculateProfileData = () => {
+      if (!lineProfileStore.startPoint || !lineProfileStore.endPoint || !props.imageRawData) return;
       
-      // 發送測量完成事件，包含所需信息
-      emit('measure-completed', {
-        sourceViewerId: props.id,
-        startPoint: [startPixel.x, startPixel.y],
-        endPoint: [endPixel.x, endPixel.y],
-        sourceData,
-        targetProfileViewer: props.targetProfileViewer
+      // 獲取起點和終點的像素坐標
+      const start = getPixelCoordinates(lineProfileStore.startPoint);
+      const end = getPixelCoordinates(lineProfileStore.endPoint);
+      
+      // 使用 Bresenham 算法計算線段經過的所有像素
+      const linePixels = getLinePixels(start.x, start.y, end.x, end.y);
+      
+      // 確保像素坐標在圖像範圍內
+      const { width, height } = props.dimensions;
+      const validPixels = linePixels.filter(
+        pixel => pixel.x >= 0 && pixel.x < width && pixel.y >= 0 && pixel.y < height
+      );
+      
+      if (validPixels.length === 0) return;
+      
+      // 計算每個點的物理距離和高度
+      const profileData = validPixels.map((pixel, index) => {
+        // 計算距離起點的物理距離
+        const dx = (pixel.x - start.x) / width * props.dimensions.xRange;
+        const dy = (pixel.y - start.y) / height * props.dimensions.yRange;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // 獲取高度 (確保在圖像範圍內)
+        let height = 0;
+        if (pixel.y < props.imageRawData.length && pixel.x < props.imageRawData[0].length) {
+          height = props.imageRawData[pixel.y][pixel.x];
+        }
+        
+        return { distance, height };
       });
       
-      // 當測量完成後，關閉測量模式
-      // 這可能需要通過 store 來處理
-      // 或者發送一個事件通知父組件
+      // 保存剖面數據
+      lineProfileStore.setProfileData(profileData);
+      
+      // 發送測量完成事件
+      emit('measure-completed', {
+        sourceViewerId: props.id,
+        startPoint: [start.x, start.y],
+        endPoint: [end.x, end.y],
+        profileData: profileData,
+        targetProfileViewer: props.targetProfileViewer
+      });
     };
-
+    
     /**
-     * 獲取像素坐標
-     * @param physPoint 物理坐標點
-     * @returns 像素坐標
+     * Bresenham 算法計算線段經過的像素
      */
-    const getPixelCoordinates = (physPoint: { x: number, y: number }) => {
-      const { width, height, xRange, yRange } = props.dimensions;
+    const getLinePixels = (x0: number, y0: number, x1: number, y1: number) => {
+      const pixels = [];
+      const dx = Math.abs(x1 - x0);
+      const dy = Math.abs(y1 - y0);
+      const sx = (x0 < x1) ? 1 : -1;
+      const sy = (y0 < y1) ? 1 : -1;
+      let err = dx - dy;
       
-      // 計算相對位置
-      const relX = physPoint.x / xRange;
-      const relY = physPoint.y / yRange;
+      let x = x0;
+      let y = y0;
       
-      // 計算像素坐標
-      const pixelX = Math.floor(relX * width);
-      const pixelY = Math.floor((1 - relY) * height); // Y軸原點在左上角，需要翻轉
+      while (true) {
+        pixels.push({ x, y });
+        
+        if (x === x1 && y === y1) break;
+        
+        const e2 = 2 * err;
+        if (e2 > -dy) {
+          err -= dy;
+          x += sx;
+        }
+        if (e2 < dx) {
+          err += dx;
+          y += sy;
+        }
+      }
       
-      return { x: pixelX, y: pixelY };
+      return pixels;
     };
+    
+    // 監視 currentPoint 變化，更新跟隨線
+    watch(() => lineProfileStore.currentPoint, () => {
+      if (lineProfileStore.lineProfileMeasureState === LineProfileState.SELECTING_END && lineProfileStore.startPoint && lineProfileStore.currentPoint) {
+        updateFollowingLine();
+      }
+    });
     
     // 監視 imageRawData 變化
     watch(() => props.imageRawData, (newData) => {
@@ -535,6 +733,21 @@ export default defineComponent({
       updatePlotlyChart();
     });
     
+    // 監視測量模式變化
+    watch(() => props.profileMeasureMode, (newValue) => {
+      if (!plotlyInstance) return;
+      
+      if (newValue) {
+        // 進入測量模式
+        initMeasureMode();
+      } else {
+        // 退出測量模式
+        clearAllTraces();
+        lineProfileStore.clearMeasurement();
+        enablePlotlyInteractions();
+      }
+    });
+    
     // 組件掛載時
     onMounted(() => {
       if (props.imageRawData) {
@@ -542,13 +755,23 @@ export default defineComponent({
       }
     });
     
+    // 組件卸載前清理事件監聽
+    onBeforeUnmount(() => {
+      if (plotlyInstance) {
+        plotlyInstance.removeListener('plotly_hover', handlePlotlyHover);
+        plotlyInstance.removeListener('plotly_unhover', handlePlotlyUnhover);
+        plotlyInstance.removeListener('plotly_click', handlePlotlyClick);
+      }
+    });
+    
     return {
       imageContainer,
       plotlyContainer,
+      lineProfileStore,
       handleClick,
       closeViewer,
       formatNumber,
-      handlePlotClick,
+      measureStateText
     };
   }
 });
