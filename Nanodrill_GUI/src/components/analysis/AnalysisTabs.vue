@@ -45,11 +45,11 @@
     </div>
     
     <!-- 標籤頁內容區域 -->
-    <div class="flex-grow overflow-auto">
+    <div class="flex-grow overflow-auto h-full">
       <!-- 活動標籤頁內容 -->
-      <div v-if="activeTab" class="p-4">
+      <div v-if="activeTab" class="p-4 h-full" >
         <!-- 如果有視圖群組，則顯示 ViewerContainer -->
-        <div v-if="activeTab.viewerGroups && activeTab.viewerGroups.length > 0">
+        <div v-if="activeTab.viewerGroups && activeTab.viewerGroups.length > 0" class="h-full">
           <!-- 只使用第一個視圖群組 (方案二) -->
           <ViewerContainer
             :id="activeTab.viewerGroups[0].id"
@@ -168,3 +168,16 @@ export default defineComponent({
   }
 });
 </script>
+
+<style scoped>
+/* 確保整個分析標籤區域填滿可用空間 */
+.h-full {
+  height: 100%;
+}
+
+/* 確保內容區域可以自適應並填滿空間 */
+.flex-grow {
+  flex: 1 1 auto;
+  min-height: 500px;
+}
+</style>

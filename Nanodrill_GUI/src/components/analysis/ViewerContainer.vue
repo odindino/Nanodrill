@@ -19,7 +19,8 @@
       class="viewers-grid p-3 grid gap-3"
       :style="{
         'grid-template-columns': 'repeat(2, 1fr)',
-        'grid-auto-rows': `${gridRowHeight}px`
+        'grid-auto-rows': `${gridRowHeight}px`,
+        'min-height': viewers.length > 0 ? `${gridRowHeight + 50}px` : 'auto'
       }"
     >
       <!-- 遍歷渲染所有視圖 -->
@@ -88,8 +89,8 @@ export default defineComponent({
     const analysisStore = useAnalysisStore();
     const spmDataStore = useSpmDataStore();
     
-    // 設置網格行高
-    const gridRowHeight = ref(350);  // 每行的默認高度
+    // 設置網格行高 - 增加高度
+    const gridRowHeight = ref(500);  // 原本是350，調整為500
     
     // 啟用容器
     const activateContainer = () => {
@@ -195,11 +196,17 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 500px; /* 確保最小高度足夠 */
 }
 
 /* 確保視圖組件填滿單元格 */
 .viewer-cell > * {
   height: 100%;
   width: 100%;
+}
+
+/* 調整grid的整體佈局 */
+.viewers-grid {
+  min-height: 500px;
 }
 </style>

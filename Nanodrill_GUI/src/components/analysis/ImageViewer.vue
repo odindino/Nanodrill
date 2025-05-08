@@ -256,7 +256,7 @@ export default defineComponent({
         const layout = {
           title: '',
           // 調整邊距，使圖形更大，並讓顏色條靠近主圖
-          margin: { l: 50, r: 60, b: 50, t: 30, pad: 0 },
+          margin: { l: 50, r: 60, b: 70, t: 80, pad: 0 },
           xaxis: {
             title: `X (${props.physUnit})`,
             constrain: 'domain',
@@ -743,10 +743,24 @@ export default defineComponent({
 /* 確保視圖高度填滿容器 */
 .image-viewer {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 確保主要內容區域可以自適應並填滿空間 */
+.flex-grow {
+  flex: 1 1 auto;
+  min-height: 400px; /* 確保最小高度足夠 */
 }
 
 /* 測量模式下的鼠標樣式 */
 .profile-measure-mode {
   cursor: crosshair !important;
+}
+
+/* Plotly 容器樣式 */
+:deep(.js-plotly-plot) {
+  width: 100% !important;
+  height: 100% !important;
 }
 </style>
