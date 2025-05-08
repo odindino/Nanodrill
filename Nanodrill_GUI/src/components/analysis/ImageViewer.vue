@@ -344,6 +344,12 @@ export default defineComponent({
       }
       
       try {
+        // 計算圓點大小為X或Y範圍的2%
+        const { xRange, yRange } = props.dimensions;
+        // 使用較小的範圍值來計算圓點尺寸，確保圓點在任何方向都不會太大
+        const minRange = Math.min(xRange, yRange);
+        const markerSize = minRange * 0.02; // 2% of range
+        
         // 定義線段形狀
         const lineShape = {
           type: 'line',
@@ -358,13 +364,13 @@ export default defineComponent({
           }
         };
         
-        // 定義起點和終點標記
+        // 定義起點和終點標記 - 使用動態大小
         const startMarker = {
           type: 'circle',
-          x0: lineProfileStore.startPoint.x - 0.1,
-          y0: lineProfileStore.startPoint.y - 0.1,
-          x1: lineProfileStore.startPoint.x + 0.1,
-          y1: lineProfileStore.startPoint.y + 0.1,
+          x0: lineProfileStore.startPoint.x - markerSize,
+          y0: lineProfileStore.startPoint.y - markerSize,
+          x1: lineProfileStore.startPoint.x + markerSize,
+          y1: lineProfileStore.startPoint.y + markerSize,
           fillcolor: 'green',
           line: {
             color: 'green',
@@ -374,10 +380,10 @@ export default defineComponent({
         
         const endMarker = {
           type: 'circle',
-          x0: lineProfileStore.endPoint.x - 0.1,
-          y0: lineProfileStore.endPoint.y - 0.1,
-          x1: lineProfileStore.endPoint.x + 0.1,
-          y1: lineProfileStore.endPoint.y + 0.1,
+          x0: lineProfileStore.endPoint.x - markerSize,
+          y0: lineProfileStore.endPoint.y - markerSize,
+          x1: lineProfileStore.endPoint.x + markerSize,
+          y1: lineProfileStore.endPoint.y + markerSize,
           fillcolor: 'blue',
           line: {
             color: 'blue',
@@ -390,12 +396,12 @@ export default defineComponent({
           shapes: [lineShape, startMarker, endMarker]
         });
         
-        console.log("線段繪製成功");
+        console.log("線段繪製成功，標記大小: " + markerSize);
       } catch (error) {
         console.error("繪製線段時出錯:", error);
       }
     };
-    
+
     // 新增：更新臨時跟隨線段 (在選擇第二點時顯示)
     const updateFollowingLine = () => {
       if (!plotlyInstance || !lineProfileStore.startPoint || !lineProfileStore.hoverData ||
@@ -404,6 +410,12 @@ export default defineComponent({
       }
       
       try {
+        // 計算圓點大小為X或Y範圍的2%
+        const { xRange, yRange } = props.dimensions;
+        // 使用較小的範圍值來計算圓點尺寸
+        const minRange = Math.min(xRange, yRange);
+        const markerSize = minRange * 0.02; // 2% of range
+        
         // 定義臨時線段
         const tempLine = {
           type: 'line',
@@ -418,13 +430,13 @@ export default defineComponent({
           }
         };
         
-        // 定義起點標記
+        // 定義起點標記 - 使用動態大小
         const startMarker = {
           type: 'circle',
-          x0: lineProfileStore.startPoint.x - 0.1,
-          y0: lineProfileStore.startPoint.y - 0.1,
-          x1: lineProfileStore.startPoint.x + 0.1,
-          y1: lineProfileStore.startPoint.y + 0.1,
+          x0: lineProfileStore.startPoint.x - markerSize,
+          y0: lineProfileStore.startPoint.y - markerSize,
+          x1: lineProfileStore.startPoint.x + markerSize,
+          y1: lineProfileStore.startPoint.y + markerSize,
           fillcolor: 'green',
           line: {
             color: 'green',
