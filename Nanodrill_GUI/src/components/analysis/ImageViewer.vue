@@ -255,7 +255,8 @@ export default defineComponent({
         // 準備布局
         const layout = {
           title: '',
-          margin: { l: 50, r: 150, b: 65, t: 25 },
+          // 調整邊距，使圖形更大，並讓顏色條靠近主圖
+          margin: { l: 50, r: 60, b: 50, t: 30, pad: 0 },
           xaxis: {
             title: `X (${props.physUnit})`,
             constrain: 'domain',
@@ -263,7 +264,9 @@ export default defineComponent({
             gridcolor: '#e5e5e5',
             gridwidth: 1,
             linewidth: 2,
-            linecolor: 'black'
+            linecolor: 'black',
+            mirror: true, // 添加鏡像以顯示所有邊框
+            showline: true // 顯示軸線
           },
           yaxis: {
             title: `Y (${props.physUnit})`,
@@ -273,7 +276,9 @@ export default defineComponent({
             gridcolor: '#e5e5e5',
             gridwidth: 1,
             linewidth: 2,
-            linecolor: 'black'
+            linecolor: 'black',
+            mirror: true, // 添加鏡像以顯示所有邊框
+            showline: true // 顯示軸線
           },
           coloraxis: {
             colorbar: {
@@ -281,12 +286,21 @@ export default defineComponent({
               titleside: 'right',
               outlinewidth: 1,
               outlinecolor: 'black',
-              thickness: 20
+              thickness: 15, // 稍微減小厚度
+              len: 0.8, // 調整長度為畫布的80%
+              x: 1.02, // 將顏色條移更靠近主圖
+              y: 0.5, // 居中
+              yanchor: 'middle'
             }
           },
+          // 確保圖形為正方形
+          aspectmode: 'equal',
+          aspectratio: { x: 1, y: 1 },
           plot_bgcolor: 'white',
           paper_bgcolor: 'white',
-          autosize: true,
+          autosize: false, // 禁用自動調整大小
+          width: 500, // 設定一個固定的寬度
+          height: 500, // 設定一個固定的高度，與寬度相等
           shapes: [] // 初始化空形狀陣列，用於線段
         };
         
