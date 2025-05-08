@@ -239,6 +239,30 @@ export default defineComponent({
         // 創建 x 和 y 座標數組
         const x = Array.from({ length: width }, (_, i) => (i * xRange) / width);
         const y = Array.from({ length: height }, (_, i) => (i * yRange) / height);
+
+        // 獲取數據的最小值和最大值，用於設置顏色條刻度
+        let zMin = Infinity;
+        let zMax = -Infinity;
+        
+        if (props.imageRawData) {
+          for (let i = 0; i < props.imageRawData.length; i++) {
+            for (let j = 0; j < props.imageRawData[i].length; j++) {
+              const val = props.imageRawData[i][j];
+              if (val < zMin) zMin = val;
+              if (val > zMax) zMax = val;
+            }
+          }
+        }
+        
+        // 計算顏色條的刻度值（均勻分成5等分）
+        const zStep = (zMax - zMin) / 4;  // 分成5等分需要4個步長
+        const colorbarTicks = [
+          zMin, 
+          zMin + zStep, 
+          zMin + 2 * zStep, 
+          zMin + 3 * zStep, 
+          zMax
+        ];
         
         // 準備數據
         const data = [{
@@ -248,15 +272,30 @@ export default defineComponent({
           type: 'heatmap',
           colorscale: props.colormap || 'Oranges',
           showscale: true,
-          zauto: true,
-          hoverinfo: props.profileMeasureMode ? 'x+y+z' : 'all'
+          zauto: false,  // 禁用自動 z 範圍，這樣我們可以設置 zmin 和 zmax
+          zmin: zMin,
+          zmax: zMax,
+          hoverinfo: props.profileMeasureMode ? 'x+y+z' : 'all',
+          colorbar: {
+            title: `Height (${props.physUnit})`,
+            titleside: 'right',
+            outlinewidth: 1,
+            outlinecolor: 'black',
+            thickness: 15,
+            len: 1,
+            x: 0.9,
+            y: 0.5,
+            yanchor: 'middle',
+            tickvals: colorbarTicks,  // 設置刻度位置
+            ticktext: colorbarTicks.map(val => val.toFixed(2)),  // 設置刻度文字（顯示兩位小數）
+            nticks: 5  // 指定想要的刻度數量
+          }
         }];
         
         // 準備布局
         const layout = {
           title: '',
-          // 調整邊距，使圖形更大，並讓顏色條靠近主圖
-          margin: { l: 50, r: 60, b: 70, t: 80, pad: 0 },
+          margin: { l: 0, r: 60, b: 50, t: 30, pad: 0 },
           xaxis: {
             title: `X (${props.physUnit})`,
             constrain: 'domain',
@@ -265,8 +304,12 @@ export default defineComponent({
             gridwidth: 1,
             linewidth: 2,
             linecolor: 'black',
-            mirror: true, // 添加鏡像以顯示所有邊框
-            showline: true // 顯示軸線
+            mirror: true,
+            showline: true,
+            range: [0, xRange],  // 明確設置 x 軸範圍，確保完整顯示最大值
+            dtick: xRange / 5,   // 設置 tick 間隔，確保能顯示約 5 個刻度
+            tickmode: 'linear',
+            tick0: 0
           },
           yaxis: {
             title: `Y (${props.physUnit})`,
@@ -277,31 +320,26 @@ export default defineComponent({
             gridwidth: 1,
             linewidth: 2,
             linecolor: 'black',
-            mirror: true, // 添加鏡像以顯示所有邊框
-            showline: true // 顯示軸線
+            mirror: true,
+            showline: true,
+            range: [0, yRange],  // 明確設置 y 軸範圍，確保完整顯示最大值
+            dtick: yRange / 5,   // 設置 tick 間隔，確保能顯示約 5 個刻度
+            tickmode: 'linear',
+            tick0: 0
           },
-          coloraxis: {
-            colorbar: {
-              title: `Height (${props.physUnit})`,
-              titleside: 'right',
-              outlinewidth: 1,
-              outlinecolor: 'black',
-              thickness: 15, // 稍微減小厚度
-              len: 0.8, // 調整長度為畫布的80%
-              x: 1.02, // 將顏色條移更靠近主圖
-              y: 0.5, // 居中
-              yanchor: 'middle'
-            }
+          modebar: {
+            // Place modebar at the top-right corner horizontally
+            orientation: 'v',
+            bgcolor: 'white',
+            color: 'black',
+            activecolor: 'black',
           },
-          // 確保圖形為正方形
           aspectmode: 'equal',
           aspectratio: { x: 1, y: 1 },
           plot_bgcolor: 'white',
           paper_bgcolor: 'white',
-          autosize: false, // 禁用自動調整大小
-          width: 500, // 設定一個固定的寬度
-          height: 500, // 設定一個固定的高度，與寬度相等
-          shapes: [] // 初始化空形狀陣列，用於線段
+          autosize: true,
+          shapes: []
         };
         
         // 設置配置
@@ -312,7 +350,7 @@ export default defineComponent({
             'sendDataToCloud', 'editInChartStudio', 
             'toggleHover', 'toggleSpikelines'
           ],
-          displaylogo: false
+          displaylogo: false,
         };
         
         // 創建圖表
@@ -339,10 +377,52 @@ export default defineComponent({
       }
       
       try {
+        // 獲取數據的最小值和最大值，用於設置顏色條刻度
+        let zMin = Infinity;
+        let zMax = -Infinity;
+        
+        if (props.imageRawData) {
+          for (let i = 0; i < props.imageRawData.length; i++) {
+            for (let j = 0; j < props.imageRawData[i].length; j++) {
+              const val = props.imageRawData[i][j];
+              if (val < zMin) zMin = val;
+              if (val > zMax) zMax = val;
+            }
+          }
+        }
+        
+        // 計算顏色條的刻度值（均勻分成5等分）
+        const zStep = (zMax - zMin) / 4;  // 分成5等分需要4個步長
+        const colorbarTicks = [
+          zMin, 
+          zMin + zStep, 
+          zMin + 2 * zStep, 
+          zMin + 3 * zStep, 
+          zMax
+        ];
+        
         // 更新數據和顏色映射
         Plotly.update(plotlyInstance, {
           'z': [props.imageRawData],
-          'colorscale': props.colormap || 'Oranges'
+          'colorscale': props.colormap || 'Oranges',
+          'zmin': zMin,
+          'zmax': zMax,
+          'colorbar.tickvals': [colorbarTicks],
+          'colorbar.ticktext': [colorbarTicks.map(val => val.toFixed(2))]
+        });
+        
+        // 更新軸範圍以確保顯示完整刻度
+        const { xRange, yRange } = props.dimensions;
+        
+        Plotly.relayout(plotlyInstance, {
+          'xaxis.range': [0, xRange],
+          'xaxis.dtick': xRange / 5,
+          'xaxis.tickmode': 'linear',
+          'xaxis.tick0': 0,
+          'yaxis.range': [0, yRange],
+          'yaxis.dtick': yRange / 5,
+          'yaxis.tickmode': 'linear',
+          'yaxis.tick0': 0
         });
         
         console.log("Plotly 圖表更新成功");
