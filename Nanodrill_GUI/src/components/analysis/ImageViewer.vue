@@ -286,7 +286,8 @@ export default defineComponent({
           },
           plot_bgcolor: 'white',
           paper_bgcolor: 'white',
-          autosize: true
+          autosize: true,
+          shapes: [] // 初始化空形狀陣列，用於線段
         };
         
         // 設置配置
@@ -333,6 +334,123 @@ export default defineComponent({
         console.log("Plotly 圖表更新成功");
       } catch (error) {
         console.error("更新 Plotly 圖表時出錯:", error);
+      }
+    };
+    
+    // 新增：繪製線段
+    const drawProfileLine = () => {
+      if (!plotlyInstance || !lineProfileStore.startPoint || !lineProfileStore.endPoint) {
+        return;
+      }
+      
+      try {
+        // 定義線段形狀
+        const lineShape = {
+          type: 'line',
+          x0: lineProfileStore.startPoint.x,
+          y0: lineProfileStore.startPoint.y,
+          x1: lineProfileStore.endPoint.x,
+          y1: lineProfileStore.endPoint.y,
+          line: {
+            color: 'red',
+            width: 2,
+            dash: 'solid'
+          }
+        };
+        
+        // 定義起點和終點標記
+        const startMarker = {
+          type: 'circle',
+          x0: lineProfileStore.startPoint.x - 0.1,
+          y0: lineProfileStore.startPoint.y - 0.1,
+          x1: lineProfileStore.startPoint.x + 0.1,
+          y1: lineProfileStore.startPoint.y + 0.1,
+          fillcolor: 'green',
+          line: {
+            color: 'green',
+            width: 1
+          }
+        };
+        
+        const endMarker = {
+          type: 'circle',
+          x0: lineProfileStore.endPoint.x - 0.1,
+          y0: lineProfileStore.endPoint.y - 0.1,
+          x1: lineProfileStore.endPoint.x + 0.1,
+          y1: lineProfileStore.endPoint.y + 0.1,
+          fillcolor: 'blue',
+          line: {
+            color: 'blue',
+            width: 1
+          }
+        };
+        
+        // 更新圖表的 layout
+        Plotly.relayout(plotlyInstance, {
+          shapes: [lineShape, startMarker, endMarker]
+        });
+        
+        console.log("線段繪製成功");
+      } catch (error) {
+        console.error("繪製線段時出錯:", error);
+      }
+    };
+    
+    // 新增：更新臨時跟隨線段 (在選擇第二點時顯示)
+    const updateFollowingLine = () => {
+      if (!plotlyInstance || !lineProfileStore.startPoint || !lineProfileStore.hoverData ||
+          lineProfileStore.lineProfileMeasureState !== LineProfileState.SELECTING_END) {
+        return;
+      }
+      
+      try {
+        // 定義臨時線段
+        const tempLine = {
+          type: 'line',
+          x0: lineProfileStore.startPoint.x,
+          y0: lineProfileStore.startPoint.y,
+          x1: lineProfileStore.hoverData.x,
+          y1: lineProfileStore.hoverData.y,
+          line: {
+            color: 'rgba(255, 0, 0, 0.5)',
+            width: 2,
+            dash: 'dash'
+          }
+        };
+        
+        // 定義起點標記
+        const startMarker = {
+          type: 'circle',
+          x0: lineProfileStore.startPoint.x - 0.1,
+          y0: lineProfileStore.startPoint.y - 0.1,
+          x1: lineProfileStore.startPoint.x + 0.1,
+          y1: lineProfileStore.startPoint.y + 0.1,
+          fillcolor: 'green',
+          line: {
+            color: 'green',
+            width: 1
+          }
+        };
+        
+        // 更新圖表的 layout
+        Plotly.relayout(plotlyInstance, {
+          shapes: [tempLine, startMarker]
+        });
+      } catch (error) {
+        console.error("更新臨時線段時出錯:", error);
+      }
+    };
+    
+    // 新增：清除所有線段
+    const clearAllLines = () => {
+      if (!plotlyInstance) return;
+      
+      try {
+        Plotly.relayout(plotlyInstance, {
+          shapes: []
+        });
+      } catch (error) {
+        console.error("清除線段時出錯:", error);
       }
     };
 
@@ -396,6 +514,11 @@ export default defineComponent({
         };
 
         lineProfileStore.updateHoverData(hoverData);
+        
+        // 如果正在選擇終點，更新臨時線段
+        if (lineProfileStore.lineProfileMeasureState === LineProfileState.SELECTING_END) {
+          updateFollowingLine();
+        }
       }
     };
     
@@ -411,7 +534,7 @@ export default defineComponent({
     };
     
     /**
-     * 處理 Plotly click 事件 - 簡化版
+     * 處理 Plotly click 事件
      */
     const handlePlotlyClick = (data: any) => {
       console.log("ImageViewer: Plotly 點擊事件被觸發");
@@ -434,6 +557,9 @@ export default defineComponent({
         switch (lineProfileStore.lineProfileMeasureState) {
           case LineProfileState.IDLE:
             console.log("狀態: IDLE，設置起點");
+            // 清除所有線段
+            clearAllLines();
+            
             // 設置起點
             lineProfileStore.setStartPoint({
               x: lineProfileStore.hoverData.x,
@@ -455,12 +581,10 @@ export default defineComponent({
             
             console.log("終點坐標:", lineProfileStore.endPoint);
             
-            // 簡化版 - 只輸出起點和終點坐標，不繪製線條
-            console.log("線性剖面測量完成:");
-            console.log("起點:", lineProfileStore.startPoint);
-            console.log("終點:", lineProfileStore.endPoint);
+            // 繪製線段
+            drawProfileLine();
             
-            // 發送測量完成事件（簡化版）
+            // 發送測量完成事件
             emit('measure-completed', {
               sourceViewerId: props.id,
               sourceData: {
@@ -478,6 +602,9 @@ export default defineComponent({
             // 重置測量狀態
             lineProfileStore.resetMeasurement();
             
+            // 清除所有線段
+            clearAllLines();
+            
             // 設置新的起點
             lineProfileStore.setStartPoint({
               x: lineProfileStore.hoverData.x,
@@ -493,6 +620,17 @@ export default defineComponent({
       }
     };
     
+    // 監視測量狀態變化
+    watch(() => lineProfileStore.lineProfileMeasureState, (newState) => {
+      if (newState === LineProfileState.COMPLETED) {
+        // 測量完成，繪製最終線段
+        drawProfileLine();
+      } else if (newState === LineProfileState.IDLE) {
+        // 測量重置，清除所有線段
+        clearAllLines();
+      }
+    });
+    
     // 監視 imageRawData 變化
     watch(() => props.imageRawData, (newData) => {
       console.log("imageRawData 變化偵測");
@@ -504,6 +642,11 @@ export default defineComponent({
           setTimeout(createPlotlyChart, 0);
         } else {
           updatePlotlyChart();
+          
+          // 如果測量已完成，重新繪製線段
+          if (lineProfileStore.lineProfileMeasureState === LineProfileState.COMPLETED) {
+            drawProfileLine();
+          }
         }
       }
     }, { immediate: true });
@@ -530,6 +673,9 @@ export default defineComponent({
         
         // 清除測量狀態
         lineProfileStore.clearMeasurement();
+        
+        // 清除所有線段
+        clearAllLines();
       }
     });
     
