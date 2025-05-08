@@ -42,12 +42,16 @@ export const useLineProfileStateStore = defineStore('lineProfileState', {
     endPoint: null as Point | null,
     // 當前 hover 數據
     hoverData: null as HoverData | null,
-    // 當前活動的 ImageViewer ID
-    activeImageViewerId: null as string | null,
-    // 目標 ProfileViewer ID
-    targetProfileViewerId: null as string | null,
     // 剖面數據
     profileData: null as ProfilePoint[] | null,
+    
+    // 新增狀態 - 從 analysisStore 移動
+    measureMode: false,
+    currentMeasuringViewerId: '', // 當前正在測量的ViewerId
+    targetProfileViewerId: null as string | null,
+    preserveActiveViewerId: '',
+    isLoading: false,
+    errorMessage: ''
   }),
 
   actions: {
@@ -70,18 +74,20 @@ export const useLineProfileStateStore = defineStore('lineProfileState', {
     
     // 開始新的測量
     startNewMeasurement(imageViewerId: string, profileViewerId: string | null) {
+      console.log(`開始新測量: 來源視圖=${imageViewerId}, 目標視圖=${profileViewerId || '無'}`);
       // 重要：清除所有現有的點和線段
       this.startPoint = null;
       this.currentPoint = null;
       this.endPoint = null;
       this.lineProfileMeasureState = LineProfileState.IDLE;
-      this.activeImageViewerId = imageViewerId;
+      this.currentMeasuringViewerId = imageViewerId;
       this.targetProfileViewerId = profileViewerId;
       this.profileData = null;
     },
     
     // 設置起點，進入測量模式
     setStartPoint(point: Point) {
+      console.log("設置起點:", point);
       // 清除之前的任何數據
       this.endPoint = null;
       this.profileData = null;
@@ -96,28 +102,102 @@ export const useLineProfileStateStore = defineStore('lineProfileState', {
     
     // 設置終點，完成測量
     setEndPoint(point: Point) {
+      console.log("設置終點:", point);
       this.endPoint = { ...point };
       this.lineProfileMeasureState = LineProfileState.COMPLETED;
     },
     
     // 設置剖面數據
     setProfileData(data: any) {
+      console.log(`設置剖面數據: ${data.length} 個點`);
       this.profileData = data;
     },
     
     // 重置測量狀態
     resetMeasurement() {
+      console.log("重置測量狀態");
       this.lineProfileMeasureState = LineProfileState.IDLE;
       // 不立即清除點數據，以便可以查看最後的測量結果
     },
     
     // 完全清除測量數據
     clearMeasurement() {
+      console.log("完全清除測量數據");
       this.startPoint = null;
       this.currentPoint = null;
       this.endPoint = null;
       this.lineProfileMeasureState = LineProfileState.IDLE;
       this.profileData = null;
+      this.measureMode = false;
+      this.currentMeasuringViewerId = '';
+      this.targetProfileViewerId = null;
+    },
+    
+    // 從 analysisStore 移動的功能
+    
+    // 切換測量模式
+    toggleMeasureMode(viewerId: string, targetProfileViewerId: string | null = null) {
+      console.log(`切換測量模式: ${!this.measureMode}, 視圖ID=${viewerId}, 目標視圖ID=${targetProfileViewerId || '無'}`);
+      
+      // 如果已經在測量其他視圖，先關閉該視圖的測量模式
+      if (this.measureMode && this.currentMeasuringViewerId && this.currentMeasuringViewerId !== viewerId) {
+        console.log(`關閉之前的測量模式: ${this.currentMeasuringViewerId}`);
+        // 這裡需要一個獲取視圖方法 - 現在已在事件中處理
+      }
+      
+      // 切換當前視圖的測量模式
+      this.measureMode = !this.measureMode;
+      this.currentMeasuringViewerId = this.measureMode ? viewerId : '';
+      
+      if (targetProfileViewerId) {
+        this.targetProfileViewerId = targetProfileViewerId;
+        this.preserveActiveViewerId = targetProfileViewerId;
+      } else {
+        this.targetProfileViewerId = null;
+        this.preserveActiveViewerId = '';
+      }
+      
+      // 重置測量狀態
+      if (this.measureMode) {
+        this.startPoint = null;
+        this.currentPoint = null;
+        this.endPoint = null;
+        this.lineProfileMeasureState = LineProfileState.IDLE;
+        this.profileData = null;
+      }
+    },
+    
+    // 處理測量完成事件 - 簡化版
+    handleMeasureCompleted(data: any) {
+      console.log("處理測量完成事件:", data);
+      
+      try {
+        if (!data.sourceViewerId || !data.startPoint || !data.endPoint) {
+          console.error("測量數據不完整:", data);
+          return false;
+        }
+        
+        // 簡化版 - 只記錄必要數據
+        console.log("測量點:", {
+          起點: data.startPoint,
+          終點: data.endPoint
+        });
+        
+        // 更新測量狀態
+        this.lineProfileMeasureState = LineProfileState.COMPLETED;
+        
+        // 如果有目標剖面視圖，發出事件通知（由呼叫者處理）
+        return true;
+      } catch (error) {
+        console.error("處理測量完成時出錯:", error);
+        this.errorMessage = `處理測量完成時出錯: ${error}`;
+        return false;
+      }
+    },
+    
+    // 清除錯誤消息
+    clearError() {
+      this.errorMessage = '';
     }
   },
 

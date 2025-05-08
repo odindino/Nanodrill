@@ -67,24 +67,6 @@
         </div>
       </div>
     </div>
-    
-    <!-- 統計數據面板 -->
-    <div v-if="roughnessStats && showStats" class="p-2 bg-gray-50 border-t border-gray-200 text-xs">
-      <div class="grid grid-cols-4 gap-2">
-        <div class="text-gray-600">
-          <span class="font-medium">Ra:</span> {{ formatNumber(roughnessStats.Ra) }} {{ physUnit }}
-        </div>
-        <div class="text-gray-600">
-          <span class="font-medium">Rq:</span> {{ formatNumber(roughnessStats.Rq) }} {{ physUnit }}
-        </div>
-        <div class="text-gray-600">
-          <span class="font-medium">Rz:</span> {{ formatNumber(roughnessStats.Rz) }} {{ physUnit }}
-        </div>
-        <div class="text-gray-600">
-          <span class="font-medium">長度:</span> {{ formatNumber(profileLength) }} {{ physUnit }}
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -92,20 +74,7 @@
 import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import type { PropType } from 'vue';
 import Plotly from 'plotly.js-dist-min';
-import { useLineProfileStateStore, LineProfileState } from '../../stores/lineProfileStateStore';
-
-interface RoughnessStats {
-  Ra: number;  // 算術平均粗糙度
-  Rq: number;  // 均方根粗糙度
-  Rz: number;  // 最大高度差
-  Rsk: number; // 偏度
-  Rku: number; // 峰度
-}
-
-interface ProfilePoint {
-  distance: number;
-  height: number;
-}
+import { useLineProfileStateStore } from '../../stores/lineProfileStateStore';
 
 export default defineComponent({
   name: 'ProfileViewer',
@@ -152,15 +121,12 @@ export default defineComponent({
     profileData: {
       type: Array as PropType<{ distance: number, height: number }[]>,
       default: () => []
-    },
-    // 粗糙度統計
-    roughnessStats: {
-      type: Object as PropType<RoughnessStats | null>,
-      default: null
     }
   },
   emits: ['click', 'close', 'start-measurement'],
   setup(props, { emit }) {
+    console.log(`ProfileViewer ${props.id} 初始化, 來源視圖: ${props.sourceViewerId}`);
+    
     // 使用 LineProfileStateStore
     const lineProfileStore = useLineProfileStateStore();
     
@@ -174,35 +140,6 @@ export default defineComponent({
              (lineProfileStore.profileData && lineProfileStore.profileData.length > 0);
     });
     
-    // 獲取實際應使用的剖面數據
-    const effectiveProfileData = computed(() => {
-      // 優先使用 props 中的數據
-      if (props.profileData && props.profileData.length > 0) {
-        return props.profileData;
-      }
-      
-      // 其次使用 store 中的數據
-      if (lineProfileStore.profileData && lineProfileStore.profileData.length > 0) {
-        return lineProfileStore.profileData;
-      }
-      
-      return [];
-    });
-    
-    // 計算剖面線長度
-    const profileLength = computed(() => {
-      const data = effectiveProfileData.value;
-      if (data.length === 0) return 0;
-      
-      return data[data.length - 1].distance;
-    });
-    
-    // 格式化數字，保留2位小數
-    const formatNumber = (value: number) => {
-      if (value === undefined || value === null) return 'N/A';
-      return value.toFixed(2);
-    };
-    
     // 處理點擊事件
     const handleClick = (event: MouseEvent) => {
       // 確保 event 是有效的
@@ -214,208 +151,99 @@ export default defineComponent({
     
     // 開始新的測量
     const startNewMeasurement = () => {
+      console.log(`ProfileViewer ${props.id} 請求開始新測量`);
       emit('start-measurement');
     };
     
-    // 創建 Plotly 剖面圖
-    const createPlotlyProfile = () => {
-      if (!plotlyContainer.value) return;
+    // 創建預設剖面圖
+    const createDefaultPlot = () => {
+      console.log("創建預設剖面圖");
       
-      const data = effectiveProfileData.value;
-      if (data.length === 0) {
-        // 沒有數據，創建空圖
-        createEmptyPlot();
+      if (!plotlyContainer.value) {
+        console.warn("plotlyContainer 不存在，無法創建預設圖");
         return;
       }
       
-      // 準備剖面數據 - 加上類型註解
-      const distances = data.map((p: ProfilePoint) => p.distance);
-      const heights = data.map((p: ProfilePoint) => p.height);
-      
-      // 準備數據
-      const plotData = [{
-        x: distances,
-        y: heights,
-        mode: 'lines',
-        type: 'scatter',
-        line: {
-          color: 'royalblue',
-          width: 2
-        },
-        name: '高度剖面'
-      }];
-      
-      // 準備布局
-      const layout = {
-        title: '',
-        xaxis: {
-          title: `距離 (${props.physUnit})`,
-          showgrid: true,
-          gridcolor: '#e5e5e5',
-          gridwidth: 1,
-          linewidth: 2,
-          linecolor: 'black',
-          zeroline: false
-        },
-        yaxis: {
-          title: `高度 (${props.physUnit})`,
-          showgrid: true,
-          gridcolor: '#e5e5e5',
-          gridwidth: 1,
-          linewidth: 2,
-          linecolor: 'black',
-          zeroline: false
-        },
-        margin: { l: 60, r: 30, t: 30, b: 60 },
-        showlegend: false,
-        plot_bgcolor: 'white',
-        paper_bgcolor: 'white',
-        autosize: true
-      };
-      
-      // 設置配置
-      const config = {
-        responsive: true,
-        displayModeBar: true,
-        modeBarButtonsToRemove: [
-          'sendDataToCloud', 'editInChartStudio'
-        ],
-        displaylogo: false
-      };
-      
-      // 創建圖表
-      Plotly.newPlot(plotlyContainer.value, plotData, layout, config);
-      plotlyInstance = plotlyContainer.value;
-    };
-    
-    // 創建空的剖面圖
-    const createEmptyPlot = () => {
-      if (!plotlyContainer.value) return;
-      
-      // 創建一個簡單的水平線 (值全為0)
-      const x = [0, 1, 2, 3, 4];
-      const y = [0, 0, 0, 0, 0];
-      
-      const data = [{
-        x: x,
-        y: y,
-        type: 'scatter',
-        mode: 'lines',
-        line: {
-          color: 'gray',
-          width: 1,
-          dash: 'dot'
-        },
-        name: '無剖面數據'
-      }];
-      
-      const layout = {
-        title: '',
-        xaxis: {
-          title: `距離 (${props.physUnit})`,
-          showgrid: true,
-          gridcolor: '#e5e5e5',
-          gridwidth: 1,
-          linewidth: 2,
-          linecolor: 'black',
-          zeroline: false
-        },
-        yaxis: {
-          title: `高度 (${props.physUnit})`,
-          showgrid: true,
-          gridcolor: '#e5e5e5',
-          gridwidth: 1,
-          linewidth: 2,
-          linecolor: 'black',
-          zeroline: false,
-          range: [-1, 1]  // 設置一個固定的範圍
-        },
-        margin: { l: 60, r: 30, t: 30, b: 60 },
-        showlegend: false,
-        plot_bgcolor: 'white',
-        paper_bgcolor: 'white',
-        autosize: true,
-        annotations: [{
-          x: 2,
-          y: 0,
-          xref: 'x',
-          yref: 'y',
-          text: '暫無剖面數據',
-          showarrow: false,
-          font: {
+      try {
+        // 創建一個簡單的水平線 (值全為0)
+        const x = [0, 1, 2, 3, 4];
+        const y = [0, 0, 0, 0, 0];
+        
+        const data = [{
+          x: x,
+          y: y,
+          type: 'scatter',
+          mode: 'lines',
+          line: {
             color: 'gray',
-            size: 14
-          }
-        }]
-      };
-      
-      const config = {
-        responsive: true,
-        displayModeBar: false,
-        displaylogo: false
-      };
-      
-      // 創建圖表
-      Plotly.newPlot(plotlyContainer.value, data, layout, config);
-      plotlyInstance = plotlyContainer.value;
+            width: 1,
+            dash: 'dot'
+          },
+          name: '無剖面數據'
+        }];
+        
+        const layout = {
+          title: '',
+          xaxis: {
+            title: `距離 (${props.physUnit})`,
+            showgrid: true,
+            gridcolor: '#e5e5e5',
+            gridwidth: 1
+          },
+          yaxis: {
+            title: `高度 (${props.physUnit})`,
+            showgrid: true,
+            gridcolor: '#e5e5e5',
+            gridwidth: 1,
+            range: [-1, 1]
+          },
+          margin: { l: 60, r: 30, t: 30, b: 60 },
+          showlegend: false,
+          plot_bgcolor: 'white',
+          paper_bgcolor: 'white',
+          autosize: true,
+          annotations: [{
+            x: 2,
+            y: 0,
+            xref: 'x',
+            yref: 'y',
+            text: '等待測量數據',
+            showarrow: false,
+            font: {
+              color: 'gray',
+              size: 14
+            }
+          }]
+        };
+        
+        const config = {
+          responsive: true,
+          displayModeBar: false,
+          displaylogo: false
+        };
+        
+        // 創建圖表
+        Plotly.newPlot(plotlyContainer.value, data, layout, config);
+        plotlyInstance = plotlyContainer.value;
+        
+        console.log("預設剖面圖創建成功");
+      } catch (error) {
+        console.error("創建預設剖面圖時出錯:", error);
+      }
     };
-    
-    // 更新剖面圖
-    const updatePlotlyProfile = () => {
-      if (!plotlyInstance) {
-        createPlotlyProfile();
-        return;
-      }
-      
-      const data = effectiveProfileData.value;
-      if (data.length === 0) {
-        // 沒有數據，重新創建空圖
-        createEmptyPlot();
-        return;
-      }
-      
-      // 準備剖面數據
-      const distances = data.map((p: ProfilePoint) => p.distance);
-      const heights = data.map((p: ProfilePoint) => p.height);
-      
-      // 更新數據
-      Plotly.update(plotlyInstance, {
-        'x': [distances],
-        'y': [heights]
-      }, {
-        'xaxis.title': `距離 (${props.physUnit})`,
-        'yaxis.title': `高度 (${props.physUnit})`
-      });
-    };
-    
-    // 監視剖面數據變化
-    watch(() => effectiveProfileData.value, () => {
-      updatePlotlyProfile();
-    });
-    
-    // 監視單位變化
-    watch(() => props.physUnit, () => {
-      if (plotlyInstance) {
-        Plotly.relayout(plotlyInstance, {
-          'xaxis.title': `距離 (${props.physUnit})`,
-          'yaxis.title': `高度 (${props.physUnit})`
-        });
-      }
-    });
-    
-    // 監視 lineProfileStore 中的剖面數據
-    watch(() => lineProfileStore.profileData, () => {
-      updatePlotlyProfile();
-    });
     
     // 組件掛載時
     onMounted(() => {
-      createPlotlyProfile();
+      console.log(`ProfileViewer ${props.id} 已掛載`);
+      createDefaultPlot();
     });
     
     // 組件卸載前清理
     onBeforeUnmount(() => {
+      console.log(`ProfileViewer ${props.id} 即將卸載`);
+      
       if (plotlyInstance) {
+        console.log("清理 Plotly 實例");
         Plotly.purge(plotlyInstance);
         plotlyInstance = null;
       }
@@ -425,9 +253,7 @@ export default defineComponent({
       plotlyContainer,
       handleClick,
       startNewMeasurement,
-      hasProfileData,
-      profileLength,
-      formatNumber
+      hasProfileData
     };
   }
 });
