@@ -84,31 +84,8 @@ import type { PropType } from 'vue';
 import Plotly from 'plotly.js-dist-min';
 import { useLineProfileStateStore, LineProfileState } from '../../stores/lineProfileStateStore';
 import type { Point, HoverData } from '../../stores/lineProfileStateStore';
-
-// 定義統計信息介面
-interface ImageStats {
-  min: number;
-  max: number;
-  mean: number;
-  median: number;
-  std: number;
-  rms: number;
-}
-
-// 定義維度介面
-interface Dimensions {
-  width: number;
-  height: number;
-  xRange: number;
-  yRange: number;
-}
-
-// 定義目標剖面視圖接口
-interface TargetProfileViewer {
-  id: string;
-  groupId?: string;
-  viewerIndex?: number;
-}
+import type { ImageStats, Dimensions } from '../../types/analysisTypes';
+import { AnalysisService } from '../../services/analysisService';  // 新增匯入
 
 export default defineComponent({
   name: 'ImageViewer',
@@ -269,7 +246,7 @@ export default defineComponent({
           z: props.imageRawData,
           x: x,
           y: y,
-          type: 'heatmap',
+          type: 'heatmap' as const,
           colorscale: props.colormap || 'Oranges',
           showscale: true,
           zauto: false,  // 禁用自動 z 範圍，這樣我們可以設置 zmin 和 zmax
@@ -290,11 +267,11 @@ export default defineComponent({
             ticktext: colorbarTicks.map(val => val.toFixed(2)),  // 設置刻度文字（顯示兩位小數）
             nticks: 5  // 指定想要的刻度數量
           }
-        }];
+        }] as any[];
         
         // 準備布局
         const layout = {
-          title: '',
+          title: { text: '' },
           margin: { l: 0, r: 60, b: 50, t: 30, pad: 0 },
           xaxis: {
             title: `X (${props.physUnit})`,
@@ -340,18 +317,18 @@ export default defineComponent({
           paper_bgcolor: 'white',
           autosize: true,
           shapes: []
-        };
+        } as any;
         
         // 設置配置
         const config = {
           responsive: true,
-          modeBarButtonsToAdd: ['drawline'],
+          modeBarButtonsToAdd: ['drawline'] as any[],
           modeBarButtonsToRemove: [
             'sendDataToCloud', 'editInChartStudio', 
             'toggleHover', 'toggleSpikelines'
-          ],
+          ] as any[],
           displaylogo: false,
-        };
+        } as any;
         
         // 創建圖表
         Plotly.newPlot(plotlyContainer.value, data, layout, config);
@@ -402,27 +379,35 @@ export default defineComponent({
         ];
         
         // 更新數據和顏色映射
-        Plotly.update(plotlyInstance, {
-          'z': [props.imageRawData],
-          'colorscale': props.colormap || 'Oranges',
-          'zmin': zMin,
-          'zmax': zMax,
-          'colorbar.tickvals': [colorbarTicks],
-          'colorbar.ticktext': [colorbarTicks.map(val => val.toFixed(2))]
-        });
+        const updateData = {
+          z: [props.imageRawData],
+          colorscale: props.colormap || 'Oranges',
+          zmin: zMin,
+          zmax: zMax,
+          colorbar: {
+            tickvals: colorbarTicks,
+            ticktext: colorbarTicks.map(val => val.toFixed(2))
+          }
+        } as any;
+        
+        Plotly.update(plotlyInstance, updateData, {}, [0]);
         
         // 更新軸範圍以確保顯示完整刻度
         const { xRange, yRange } = props.dimensions;
         
         Plotly.relayout(plotlyInstance, {
-          'xaxis.range': [0, xRange],
-          'xaxis.dtick': xRange / 5,
-          'xaxis.tickmode': 'linear',
-          'xaxis.tick0': 0,
-          'yaxis.range': [0, yRange],
-          'yaxis.dtick': yRange / 5,
-          'yaxis.tickmode': 'linear',
-          'yaxis.tick0': 0
+          'xaxis': {
+            range: [0, xRange],
+            dtick: xRange / 5,
+            tickmode: 'linear',
+            tick0: 0
+          },
+          'yaxis': {
+            range: [0, yRange],
+            dtick: yRange / 5,
+            tickmode: 'linear',
+            tick0: 0
+          }
         });
         
         console.log("Plotly 圖表更新成功");
@@ -446,7 +431,7 @@ export default defineComponent({
         
         // 定義線段形狀
         const lineShape = {
-          type: 'line',
+          type: 'line' as const,
           x0: lineProfileStore.startPoint.x,
           y0: lineProfileStore.startPoint.y,
           x1: lineProfileStore.endPoint.x,
@@ -460,7 +445,7 @@ export default defineComponent({
         
         // 定義起點和終點標記 - 使用動態大小
         const startMarker = {
-          type: 'circle',
+          type: 'circle' as const,
           x0: lineProfileStore.startPoint.x - markerSize,
           y0: lineProfileStore.startPoint.y - markerSize,
           x1: lineProfileStore.startPoint.x + markerSize,
@@ -473,7 +458,7 @@ export default defineComponent({
         };
         
         const endMarker = {
-          type: 'circle',
+          type: 'circle' as const,
           x0: lineProfileStore.endPoint.x - markerSize,
           y0: lineProfileStore.endPoint.y - markerSize,
           x1: lineProfileStore.endPoint.x + markerSize,
@@ -487,7 +472,7 @@ export default defineComponent({
         
         // 更新圖表的 layout
         Plotly.relayout(plotlyInstance, {
-          shapes: [lineShape, startMarker, endMarker]
+          shapes: [lineShape, startMarker, endMarker] as any[]
         });
         
         console.log("線段繪製成功，標記大小: " + markerSize);
@@ -512,7 +497,7 @@ export default defineComponent({
         
         // 定義臨時線段
         const tempLine = {
-          type: 'line',
+          type: 'line' as const,
           x0: lineProfileStore.startPoint.x,
           y0: lineProfileStore.startPoint.y,
           x1: lineProfileStore.hoverData.x,
@@ -526,7 +511,7 @@ export default defineComponent({
         
         // 定義起點標記 - 使用動態大小
         const startMarker = {
-          type: 'circle',
+          type: 'circle' as const,
           x0: lineProfileStore.startPoint.x - markerSize,
           y0: lineProfileStore.startPoint.y - markerSize,
           x1: lineProfileStore.startPoint.x + markerSize,
@@ -540,7 +525,7 @@ export default defineComponent({
         
         // 更新圖表的 layout
         Plotly.relayout(plotlyInstance, {
-          shapes: [tempLine, startMarker]
+          shapes: [tempLine, startMarker] as any[]
         });
       } catch (error) {
         console.error("更新臨時線段時出錯:", error);
@@ -557,6 +542,40 @@ export default defineComponent({
         });
       } catch (error) {
         console.error("清除線段時出錯:", error);
+      }
+    };
+
+    // 新增：獲取剖面數據
+    const fetchProfileData = async () => {
+      if (!lineProfileStore.startPoint || !lineProfileStore.endPoint || !props.imageRawData) {
+        console.warn("無法獲取剖面數據：缺少起點、終點或圖像數據");
+        return;
+      }
+
+      try {
+        console.log("開始獲取剖面數據");
+        
+        // 計算物理尺度（使用較大的範圍作為尺度）
+        const scale = Math.max(props.dimensions.xRange, props.dimensions.yRange);
+
+        // 調用後端 API 獲取剖面數據
+        const result = await AnalysisService.getLineProfile(
+          props.imageRawData,
+          [lineProfileStore.startPoint.x, lineProfileStore.startPoint.y],
+          [lineProfileStore.endPoint.x, lineProfileStore.endPoint.y],
+          scale,
+          false // shiftZero
+        );
+        
+        if (result && result.success && result.profile_data) {
+          // 更新 lineProfileStore 中的剖面數據
+          lineProfileStore.setProfileData(result.profile_data);
+          console.log("剖面數據獲取成功，數據點數:", result.profile_data.length);
+        } else {
+          console.error("獲取剖面數據失敗:", result);
+        }
+      } catch (error) {
+        console.error("獲取剖面數據時出錯:", error);
       }
     };
 
@@ -689,6 +708,9 @@ export default defineComponent({
             
             // 繪製線段
             drawProfileLine();
+            
+            // 新增：獲取剖面數據並更新 lineProfileStore
+            fetchProfileData();
             
             // 發送測量完成事件
             emit('measure-completed', {

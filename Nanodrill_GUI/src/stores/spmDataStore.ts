@@ -236,6 +236,47 @@ export const useSpmDataStore = defineStore('spmData', {
           ...data
         };
       }
+    },
+
+    // 更新 viewer 的 props
+    updateViewerProps(tabId: string, groupId: string, viewerIndex: number, newProps: Record<string, any>) {
+      const tabIndex = this.analysisTabs.findIndex(tab => tab.id === tabId);
+      
+      if (tabIndex !== -1) {
+        const tab = this.analysisTabs[tabIndex];
+        if (tab.viewerGroups) {
+          const groupIndex = tab.viewerGroups.findIndex(g => g.id === groupId);
+          if (groupIndex !== -1) {
+            const group = tab.viewerGroups[groupIndex];
+            if (viewerIndex < group.viewers.length) {
+              const viewer = group.viewers[viewerIndex];
+              
+              // 更新 viewer 的 props
+              const updatedViewers = [...group.viewers];
+              updatedViewers[viewerIndex] = {
+                ...viewer,
+                props: {
+                  ...viewer.props,
+                  ...newProps
+                }
+              };
+              
+              // 更新群組
+              const updatedGroups = [...tab.viewerGroups];
+              updatedGroups[groupIndex] = {
+                ...group,
+                viewers: updatedViewers
+              };
+              
+              // 更新標籤頁
+              this.analysisTabs[tabIndex] = {
+                ...tab,
+                viewerGroups: updatedGroups
+              };
+            }
+          }
+        }
+      }
     }
   }
 });

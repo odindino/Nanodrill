@@ -40,6 +40,9 @@ class IntParser:
             # 應用比例因子
             image_data = image_data * self.scale
             
+            # 將數據上下顛倒
+            image_data = np.flipud(image_data)
+            
             self.data = image_data
             return self.data
         except Exception as e:

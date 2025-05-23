@@ -155,7 +155,102 @@ export default defineComponent({
       emit('start-measurement');
     };
     
-    // 創建預設剖面圖
+    // 更新剖面圖
+    const updateProfilePlot = (profileData: any[]) => {
+      console.log("更新剖面圖，數據點數:", profileData.length);
+      
+      if (!plotlyContainer.value) {
+        console.warn("plotlyContainer 不存在，無法更新圖");
+        return;
+      }
+      
+      try {
+        // 檢查數據格式
+        if (!profileData || profileData.length === 0) {
+          console.warn("無效的剖面數據");
+          return;
+        }
+        
+        // 準備 X 和 Y 數據數組
+        const x = profileData.map(point => point.distance);
+        const y = profileData.map(point => point.height);
+        
+        // 計算統計信息
+        const min = Math.min(...y);
+        const max = Math.max(...y);
+        
+        // 創建圖表數據
+        const data = [{
+          x: x,
+          y: y,
+          type: 'scatter' as const,
+          mode: 'lines',
+          line: {
+            color: 'blue',
+            width: 2
+          },
+          name: '剖面線'
+        }] as any[];
+        
+        // 創建布局
+        const layout = {
+          title: { text: '' },
+          xaxis: {
+            title: { text: `距離 (${props.physUnit})` },
+            showgrid: true,
+            gridcolor: '#e5e5e5',
+            gridwidth: 1,
+            range: [0, Math.max(...x)]
+          },
+          yaxis: {
+            title: { text: `高度 (${props.physUnit})` },
+            showgrid: true,
+            gridcolor: '#e5e5e5',
+            gridwidth: 1,
+            // 設置 Y 軸範圍，上下留出10%的邊距
+            range: [min - (max - min) * 0.1, max + (max - min) * 0.1]
+          },
+          margin: { l: 60, r: 30, t: 30, b: 60 },
+          showlegend: false,
+          plot_bgcolor: 'white',
+          paper_bgcolor: 'white',
+          autosize: true
+        } as any;
+        
+        const config = {
+          responsive: true,
+          displaylogo: false
+        };
+        
+        // 如果已經有圖表實例，則更新它；否則創建新的
+        if (plotlyInstance) {
+          Plotly.react(plotlyContainer.value, data, layout, config);
+        } else {
+          Plotly.newPlot(plotlyContainer.value, data, layout, config);
+          plotlyInstance = plotlyContainer.value;
+        }
+        
+        console.log("剖面圖更新成功");
+      } catch (error) {
+        console.error("更新剖面圖時出錯:", error);
+      }
+    };
+    
+    // 監聽 LineProfileStateStore 中的 profileData 變化
+    watch(() => lineProfileStore.profileData, (newData) => {
+      if (newData && newData.length > 0) {
+        updateProfilePlot(newData);
+      }
+    });
+    
+    // 監聽 props 中的 profileData 變化
+    watch(() => props.profileData, (newData) => {
+      if (newData && newData.length > 0) {
+        updateProfilePlot(newData);
+      }
+    });
+    
+    // 剢建預設剖面圖
     const createDefaultPlot = () => {
       console.log("創建預設剖面圖");
       
@@ -172,7 +267,7 @@ export default defineComponent({
         const data = [{
           x: x,
           y: y,
-          type: 'scatter',
+          type: 'scatter' as const,
           mode: 'lines',
           line: {
             color: 'gray',
@@ -180,18 +275,18 @@ export default defineComponent({
             dash: 'dot'
           },
           name: '無剖面數據'
-        }];
+        }] as any[];
         
         const layout = {
-          title: '',
+          title: { text: '' },
           xaxis: {
-            title: `距離 (${props.physUnit})`,
+            title: { text: `距離 (${props.physUnit})` },
             showgrid: true,
             gridcolor: '#e5e5e5',
             gridwidth: 1
           },
           yaxis: {
-            title: `高度 (${props.physUnit})`,
+            title: { text: `高度 (${props.physUnit})` },
             showgrid: true,
             gridcolor: '#e5e5e5',
             gridwidth: 1,
@@ -205,15 +300,15 @@ export default defineComponent({
           annotations: [{
             x: 2,
             y: 0,
-            xref: 'x',
-            yref: 'y',
+            xref: 'x' as const,
+            yref: 'y' as const,
             text: '等待測量數據',
             showarrow: false,
             font: {
               color: 'gray',
               size: 14
             }
-          }]
+          }] as any
         };
         
         const config = {

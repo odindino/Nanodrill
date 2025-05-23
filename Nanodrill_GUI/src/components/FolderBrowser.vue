@@ -99,18 +99,6 @@ interface FileInfo {
   hasDatFile: boolean;
 }
 
-declare global {
-  interface Window {
-    pywebview: {
-      api: {
-        open_folder_dialog: () => Promise<any>;
-        get_folder_files: (path: string) => Promise<any>;
-        get_txt_file_content: (path: string) => Promise<any>;
-      };
-    };
-  }
-}
-
 export default defineComponent({
   name: 'FolderBrowser',
   

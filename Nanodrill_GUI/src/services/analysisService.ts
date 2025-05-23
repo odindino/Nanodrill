@@ -56,4 +56,36 @@ export class AnalysisService {
         throw error;
       }
     }
+
+    /**
+     * 應用平面化處理
+     * @param imageData 圖像數據
+     * @param method 平面化方法 ("mean", "polyfit", "plane")
+     * @param degree 多項式階數（當方法為polyfit時使用）
+     * @returns 返回處理後的數據
+     */
+    static async applyFlatten(imageData: number[][], method: 'mean' | 'polyfit' | 'plane' = 'mean', degree = 1) {
+      try {
+        return await window.pywebview.api.apply_flatten(imageData, method, degree);
+      } catch (error) {
+        console.error('平面化處理失敗:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * 應用影像傾斜調整
+     * @param imageData 圖像數據
+     * @param direction 傾斜方向 ("up", "down", "left", "right")
+     * @param fineTune 是否為微調模式
+     * @returns 返回處理後的數據
+     */
+    static async tiltImage(imageData: number[][], direction: 'up' | 'down' | 'left' | 'right', fineTune = false) {
+      try {
+        return await window.pywebview.api.tilt_image(imageData, direction, fineTune);
+      } catch (error) {
+        console.error('傾斜調整失敗:', error);
+        throw error;
+      }
+    }
   }
