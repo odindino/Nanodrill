@@ -136,8 +136,15 @@ export default defineComponent({
     
     // 是否有剖面數據
     const hasProfileData = computed(() => {
-      return (props.profileData && props.profileData.length > 0) || 
-             (lineProfileStore.profileData && lineProfileStore.profileData.length > 0);
+      // 優先檢查 lineProfileStore 中的數據
+      if (lineProfileStore.profileData && lineProfileStore.profileData.length > 0) {
+        return true;
+      }
+      // 然後檢查 props 中的數據
+      if (props.profileData && props.profileData.length > 0) {
+        return true;
+      }
+      return false;
     });
     
     // 處理點擊事件
@@ -238,10 +245,14 @@ export default defineComponent({
     
     // 監聽 LineProfileStateStore 中的 profileData 變化
     watch(() => lineProfileStore.profileData, (newData) => {
+      console.log("ProfileViewer: lineProfileStore.profileData 發生變化", newData);
       if (newData && newData.length > 0) {
+        console.log("ProfileViewer: 開始更新剖面圖，數據點數:", newData.length);
         updateProfilePlot(newData);
+      } else {
+        console.log("ProfileViewer: 數據為空或無效");
       }
-    });
+    }, { immediate: true, deep: true });
     
     // 監聽 props 中的 profileData 變化
     watch(() => props.profileData, (newData) => {
@@ -331,6 +342,15 @@ export default defineComponent({
     onMounted(() => {
       console.log(`ProfileViewer ${props.id} 已掛載`);
       createDefaultPlot();
+      
+      // 檢查是否已有數據需要顯示
+      if (lineProfileStore.profileData && lineProfileStore.profileData.length > 0) {
+        console.log("ProfileViewer: 掛載時發現已有數據，立即更新圖表");
+        updateProfilePlot(lineProfileStore.profileData);
+      } else if (props.profileData && props.profileData.length > 0) {
+        console.log("ProfileViewer: 掛載時發現 props 中有數據，立即更新圖表");
+        updateProfilePlot(props.profileData);
+      }
     });
     
     // 組件卸載前清理

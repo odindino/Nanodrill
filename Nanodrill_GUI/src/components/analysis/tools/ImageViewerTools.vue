@@ -104,6 +104,64 @@
         處理中...
       </div>
     </div>
+
+    <!-- 顯示設定 -->
+    <div>
+      <label class="text-xs text-gray-500 block mb-2">顯示設定</label>
+      
+      <!-- Colormap 選擇 -->
+      <div class="mb-3">
+        <label class="text-xs text-gray-600 block mb-1">色彩映射</label>
+        <select 
+          :value="currentColormap"
+          @change="changeColormap(($event.target as HTMLSelectElement)?.value)"
+          class="w-full py-1.5 px-2 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="Oranges">橘色 (Oranges)</option>
+          <option value="Viridis">綠藍色 (Viridis)</option>
+          <option value="Plasma">等離子 (Plasma)</option>
+          <option value="Inferno">地獄 (Inferno)</option>
+          <option value="Magma">岩漿 (Magma)</option>
+          <option value="Cividis">色盲友好 (Cividis)</option>
+          <option value="Hot">熱力圖 (Hot)</option>
+          <option value="Cool">冷色調 (Cool)</option>
+          <option value="Spring">春天 (Spring)</option>
+          <option value="Summer">夏天 (Summer)</option>
+          <option value="Autumn">秋天 (Autumn)</option>
+          <option value="Winter">冬天 (Winter)</option>
+          <option value="RdYlBu">紅黃藍 (RdYlBu)</option>
+          <option value="Spectral">光譜 (Spectral)</option>
+          <option value="Turbo">渦輪 (Turbo)</option>
+        </select>
+      </div>
+
+      <!-- Colorbar 控制 -->
+      <div>
+        <label class="text-xs text-gray-600 block mb-1">色彩條控制</label>
+        <div class="space-y-1">
+          <div class="flex items-center space-x-2">
+            <input 
+              type="checkbox" 
+              id="reverse-colormap" 
+              v-model="reverseColormap"
+              @change="toggleReverseColormap"
+              class="w-3 h-3 text-primary border-gray-300 rounded focus:ring-primary focus:ring-1"
+            >
+            <label for="reverse-colormap" class="text-xs text-gray-600">反轉顏色</label>
+          </div>
+          <div class="flex items-center space-x-2">
+            <input 
+              type="checkbox" 
+              id="auto-scale" 
+              v-model="autoScale"
+              @change="toggleAutoScale"
+              class="w-3 h-3 text-primary border-gray-300 rounded focus:ring-primary focus:ring-1"
+            >
+            <label for="auto-scale" class="text-xs text-gray-600">自動縮放</label>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -131,6 +189,11 @@ export default defineComponent({
     const processingFlatten = ref(false);
     const processingTilt = ref(false);
     const fineTuneMode = ref(false);
+    
+    // 顏色映射相關狀態
+    const currentColormap = ref('Viridis');
+    const reverseColormap = ref(false);
+    const autoScale = ref(true);
     
     // 計算屬性：檢查是否有已連接的 ProfileViewer
     const isProfileViewerLinked = computed(() => {
@@ -257,14 +320,82 @@ export default defineComponent({
       }
     };
     
+    // 顏色映射相關功能
+    
+    // 更改色彩映射
+    const changeColormap = (newColormap: string) => {
+      if (!newColormap) return;
+      
+      currentColormap.value = newColormap;
+      
+      // 構建最終的 colormap 名稱（包含反轉）
+      const finalColormap = reverseColormap.value ? `${newColormap}_r` : newColormap;
+      
+      // 更新 viewer 的 colormap 屬性
+      updateViewerProps({
+        colormap: finalColormap
+      });
+      
+      console.log('色彩映射已更新為:', finalColormap);
+    };
+    
+    // 切換反轉色彩映射
+    const toggleReverseColormap = () => {
+      const baseColormap = currentColormap.value.replace('_r', '');
+      const finalColormap = reverseColormap.value ? `${baseColormap}_r` : baseColormap;
+      
+      updateViewerProps({
+        colormap: finalColormap
+      });
+      
+      console.log('色彩映射反轉狀態已更新:', reverseColormap.value, '最終映射:', finalColormap);
+    };
+    
+    // 切換自動縮放
+    const toggleAutoScale = () => {
+      updateViewerProps({
+        autoScale: autoScale.value
+      });
+      
+      console.log('自動縮放已更新為:', autoScale.value);
+    };
+    
+    // 通用的更新 viewer 屬性方法
+    const updateViewerProps = (newProps: Partial<any>) => {
+      const location = spmDataStore.getViewerLocation(props.viewer.id);
+      if (!location) {
+        console.error('無法找到 viewer 位置');
+        return;
+      }
+      
+      const { tabId, groupId, viewerIndex } = location;
+      
+      // 更新 viewer 屬性
+      spmDataStore.updateViewerProps(tabId, groupId, viewerIndex, newProps);
+    };
+
+    // 初始化 colormap 狀態
+    onMounted(() => {
+      // 設定初始的 colormap
+      updateViewerProps({
+        colormap: currentColormap.value
+      });
+    });
+    
     return {
       isProfileViewerLinked,
       processingFlatten,
       processingTilt,
       fineTuneMode,
+      currentColormap,
+      reverseColormap,
+      autoScale,
       createLineProfile,
       applyFlatten,
-      tiltImage
+      tiltImage,
+      changeColormap,
+      toggleReverseColormap,
+      toggleAutoScale
     };
   }
 });

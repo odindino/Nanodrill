@@ -322,12 +322,16 @@ export default defineComponent({
         // 設置配置
         const config = {
           responsive: true,
-          modeBarButtonsToAdd: ['drawline'] as any[],
           modeBarButtonsToRemove: [
             'sendDataToCloud', 'editInChartStudio', 
             'toggleHover', 'toggleSpikelines'
           ] as any[],
           displaylogo: false,
+          // 確保互動功能正常
+          scrollZoom: true,
+          doubleClick: 'reset',
+          // 在測量模式下禁用某些互動
+          staticPlot: false
         } as any;
         
         // 創建圖表
@@ -559,18 +563,25 @@ export default defineComponent({
         const scale = Math.max(props.dimensions.xRange, props.dimensions.yRange);
 
         // 調用後端 API 獲取剖面數據
+        // 注意：後端期待座標格式為 (y, x)，所以需要調換順序
         const result = await AnalysisService.getLineProfile(
           props.imageRawData,
-          [lineProfileStore.startPoint.x, lineProfileStore.startPoint.y],
-          [lineProfileStore.endPoint.x, lineProfileStore.endPoint.y],
+          [lineProfileStore.startPoint.y, lineProfileStore.startPoint.x],
+          [lineProfileStore.endPoint.y, lineProfileStore.endPoint.x],
           scale,
           false // shiftZero
         );
         
         if (result && result.success && result.profile_data) {
+          // 轉換後端數據格式為前端期望的格式
+          const profileDataFormatted = result.profile_data.distance.map((dist: number, index: number) => ({
+            distance: dist,
+            height: result.profile_data.height[index]
+          }));
+          
           // 更新 lineProfileStore 中的剖面數據
-          lineProfileStore.setProfileData(result.profile_data);
-          console.log("剖面數據獲取成功，數據點數:", result.profile_data.length);
+          lineProfileStore.setProfileData(profileDataFormatted);
+          console.log("剖面數據獲取成功，數據點數:", profileDataFormatted.length);
         } else {
           console.error("獲取剖面數據失敗:", result);
         }
@@ -759,41 +770,15 @@ export default defineComponent({
       }
     });
     
-    // 監視 imageRawData 變化
-    watch(() => props.imageRawData, (newData) => {
-      console.log("imageRawData 變化偵測");
-      
-      if (newData) {
-        // 有數據時創建或更新圖表
-        if (!plotlyInstance) {
-          // 延遲一幀以確保 DOM 已更新
-          setTimeout(createPlotlyChart, 0);
-        } else {
-          updatePlotlyChart();
-          
-          // 如果測量已完成，重新繪製線段
-          if (lineProfileStore.lineProfileMeasureState === LineProfileState.COMPLETED) {
-            drawProfileLine();
-          }
-        }
-      }
-    }, { immediate: true });
-    
-    // 監視色彩映射變化
-    watch(() => props.colormap, () => {
-      updatePlotlyChart();
-    });
-    
     // 監視測量模式變化
-    watch(() => props.profileMeasureMode, (newValue) => {
-      console.log(`測量模式變化: ${newValue}`);
+    watch(() => props.profileMeasureMode, (newMode) => {
+      console.log(`ImageViewer ${props.id} 測量模式變更為:`, newMode);
       
-      if (!plotlyInstance) return;
-      
-      if (newValue) {
+      if (newMode) {
         // 進入測量模式
         console.log("進入測量模式");
         
+        // 這裡可以禁用或修改某些 Plotly 功能，避免與測量模式衝突
         // 如果需要禁用 Plotly 默認交互，可以在這裡添加相關代碼
       } else {
         // 退出測量模式
@@ -804,6 +789,26 @@ export default defineComponent({
         
         // 清除所有線段
         clearAllLines();
+      }
+    });
+    
+    // 監視 colormap 屬性變化
+    watch(() => props.colormap, (newColormap) => {
+      console.log(`ImageViewer ${props.id} colormap 變更為:`, newColormap);
+      if (plotlyInstance && newColormap) {
+        updatePlotlyChart();
+      }
+    });
+    
+    // 監視圖像數據變化
+    watch(() => props.imageRawData, (newData) => {
+      console.log(`ImageViewer ${props.id} imageRawData 已更新`);
+      if (newData && plotlyContainer.value) {
+        if (plotlyInstance) {
+          updatePlotlyChart();
+        } else {
+          createPlotlyChart();
+        }
       }
     });
     
