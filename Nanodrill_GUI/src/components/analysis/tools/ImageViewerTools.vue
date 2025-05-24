@@ -104,7 +104,7 @@
         處理中...
       </div>
     </div>
-
+    
     <!-- 顯示設定 -->
     <div>
       <label class="text-xs text-gray-500 block mb-2">顯示設定</label>
@@ -117,21 +117,24 @@
           @change="changeColormap(($event.target as HTMLSelectElement)?.value)"
           class="w-full py-1.5 px-2 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="Oranges">橘色 (Oranges)</option>
           <option value="Viridis">綠藍色 (Viridis)</option>
           <option value="Plasma">等離子 (Plasma)</option>
           <option value="Inferno">地獄 (Inferno)</option>
           <option value="Magma">岩漿 (Magma)</option>
           <option value="Cividis">色盲友好 (Cividis)</option>
           <option value="Hot">熱力圖 (Hot)</option>
-          <option value="Cool">冷色調 (Cool)</option>
-          <option value="Spring">春天 (Spring)</option>
-          <option value="Summer">夏天 (Summer)</option>
-          <option value="Autumn">秋天 (Autumn)</option>
-          <option value="Winter">冬天 (Winter)</option>
+          <option value="Jet">彩虹 (Jet)</option>
+          <option value="Rainbow">彩虹2 (Rainbow)</option>
+          <option value="Blackbody">黑體 (Blackbody)</option>
+          <option value="Earth">地球 (Earth)</option>
+          <option value="Electric">電子 (Electric)</option>
+          <option value="YlOrRd">黃橘紅 (YlOrRd)</option>
+          <option value="YlGnBu">黃綠藍 (YlGnBu)</option>
           <option value="RdYlBu">紅黃藍 (RdYlBu)</option>
-          <option value="Spectral">光譜 (Spectral)</option>
-          <option value="Turbo">渦輪 (Turbo)</option>
+          <option value="Portland">波特蘭 (Portland)</option>
+          <option value="Picnic">野餐 (Picnic)</option>
+          <option value="Blues">藍色 (Blues)</option>
+          <option value="Oranges">橘色 (Oranges)</option>
         </select>
       </div>
 
@@ -191,7 +194,7 @@ export default defineComponent({
     const fineTuneMode = ref(false);
     
     // 顏色映射相關狀態
-    const currentColormap = ref('Viridis');
+    const currentColormap = ref('Oranges');  // 改為預設 Oranges
     const reverseColormap = ref(false);
     const autoScale = ref(true);
     
@@ -326,9 +329,10 @@ export default defineComponent({
     const changeColormap = (newColormap: string) => {
       if (!newColormap) return;
       
+      // 儲存基礎 colormap 名稱（不含 _r）
       currentColormap.value = newColormap;
       
-      // 構建最終的 colormap 名稱（包含反轉）
+      // 根據當前反轉狀態構建最終的 colormap 名稱
       const finalColormap = reverseColormap.value ? `${newColormap}_r` : newColormap;
       
       // 更新 viewer 的 colormap 屬性
@@ -336,19 +340,19 @@ export default defineComponent({
         colormap: finalColormap
       });
       
-      console.log('色彩映射已更新為:', finalColormap);
+      console.log('色彩映射已更新:', '基礎映射:', newColormap, '反轉狀態:', reverseColormap.value, '最終映射:', finalColormap);
     };
     
     // 切換反轉色彩映射
     const toggleReverseColormap = () => {
-      const baseColormap = currentColormap.value.replace('_r', '');
-      const finalColormap = reverseColormap.value ? `${baseColormap}_r` : baseColormap;
+      // 根據反轉狀態構建最終的 colormap 名稱
+      const finalColormap = reverseColormap.value ? `${currentColormap.value}_r` : currentColormap.value;
       
       updateViewerProps({
         colormap: finalColormap
       });
       
-      console.log('色彩映射反轉狀態已更新:', reverseColormap.value, '最終映射:', finalColormap);
+      console.log('色彩映射反轉狀態已更新:', reverseColormap.value, '基礎映射:', currentColormap.value, '最終映射:', finalColormap);
     };
     
     // 切換自動縮放
@@ -376,9 +380,28 @@ export default defineComponent({
 
     // 初始化 colormap 狀態
     onMounted(() => {
-      // 設定初始的 colormap
-      updateViewerProps({
-        colormap: currentColormap.value
+      // 從 viewer 的當前 props 獲取初始 colormap 值
+      if (props.viewer.props.colormap) {
+        const currentColormapValue = props.viewer.props.colormap;
+        // 檢查是否有 _r 後綴
+        if (currentColormapValue.endsWith('_r')) {
+          currentColormap.value = currentColormapValue.slice(0, -2);
+          reverseColormap.value = true;
+        } else {
+          currentColormap.value = currentColormapValue;
+          reverseColormap.value = false;
+        }
+      } else {
+        // 設定初始的 colormap
+        updateViewerProps({
+          colormap: currentColormap.value
+        });
+      }
+      
+      console.log('ImageViewerTools 初始化完成', {
+        基礎映射: currentColormap.value,
+        反轉狀態: reverseColormap.value,
+        當前映射: props.viewer.props.colormap
       });
     });
     

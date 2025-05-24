@@ -330,8 +330,20 @@ export default defineComponent({
           // 確保互動功能正常
           scrollZoom: true,
           doubleClick: 'reset',
-          // 在測量模式下禁用某些互動
-          staticPlot: false
+          // 永遠不要鎖定圖表
+          staticPlot: false,
+          // 確保拖拽功能正常
+          editable: false,
+          // 確保所有互動都啟用
+          showTips: true,
+          // 確保 hover 和 click 事件正常工作
+          toImageButtonOptions: {
+            format: 'png',
+            filename: 'nanodrill_image',
+            height: 500,
+            width: 700,
+            scale: 1
+          }
         } as any;
         
         // 創建圖表
@@ -559,16 +571,39 @@ export default defineComponent({
       try {
         console.log("開始獲取剖面數據");
         
-        // 計算物理尺度（使用較大的範圍作為尺度）
-        const scale = Math.max(props.dimensions.xRange, props.dimensions.yRange);
+        // 將物理座標轉換為像素座標
+        const { xRange, yRange } = props.dimensions;
+        const imageHeight = props.imageRawData.length;
+        const imageWidth = props.imageRawData[0].length;
+        
+        // 轉換起點座標：從物理座標(nm)轉為像素座標
+        const startPixelY = Math.round((lineProfileStore.startPoint.y / yRange) * imageHeight);
+        const startPixelX = Math.round((lineProfileStore.startPoint.x / xRange) * imageWidth);
+        
+        // 轉換終點座標：從物理座標(nm)轉為像素座標
+        const endPixelY = Math.round((lineProfileStore.endPoint.y / yRange) * imageHeight);
+        const endPixelX = Math.round((lineProfileStore.endPoint.x / xRange) * imageWidth);
+        
+        // 計算物理尺度 (nm per pixel)
+        const physicalScale = Math.max(xRange / imageWidth, yRange / imageHeight);
+        
+        console.log("座標轉換:", {
+          物理起點: [lineProfileStore.startPoint.x, lineProfileStore.startPoint.y],
+          像素起點: [startPixelX, startPixelY],
+          物理終點: [lineProfileStore.endPoint.x, lineProfileStore.endPoint.y],
+          像素終點: [endPixelX, endPixelY],
+          物理尺度: physicalScale,
+          圖像尺寸: [imageWidth, imageHeight],
+          物理範圍: [xRange, yRange]
+        });
 
         // 調用後端 API 獲取剖面數據
         // 注意：後端期待座標格式為 (y, x)，所以需要調換順序
         const result = await AnalysisService.getLineProfile(
           props.imageRawData,
-          [lineProfileStore.startPoint.y, lineProfileStore.startPoint.x],
-          [lineProfileStore.endPoint.y, lineProfileStore.endPoint.x],
-          scale,
+          [startPixelY, startPixelX],
+          [endPixelY, endPixelX],
+          physicalScale,
           false // shiftZero
         );
         
@@ -587,6 +622,55 @@ export default defineComponent({
         }
       } catch (error) {
         console.error("獲取剖面數據時出錯:", error);
+      }
+    };
+
+    // 新增：即時獲取剖面數據（用於滑鼠跟隨）
+    const fetchRealtimeProfileData = async (endPoint: { x: number, y: number, z: number }) => {
+      if (!lineProfileStore.startPoint || !props.imageRawData) {
+        return;
+      }
+
+      try {
+        // 將物理座標轉換為像素座標
+        const { xRange, yRange } = props.dimensions;
+        const imageHeight = props.imageRawData.length;
+        const imageWidth = props.imageRawData[0].length;
+        
+        // 轉換起點座標：從物理座標(nm)轉為像素座標
+        const startPixelY = Math.round((lineProfileStore.startPoint.y / yRange) * imageHeight);
+        const startPixelX = Math.round((lineProfileStore.startPoint.x / xRange) * imageWidth);
+        
+        // 轉換終點座標：從物理座標(nm)轉為像素座標
+        const endPixelY = Math.round((endPoint.y / yRange) * imageHeight);
+        const endPixelX = Math.round((endPoint.x / xRange) * imageWidth);
+        
+        // 計算物理尺度 (nm per pixel)
+        const physicalScale = Math.max(xRange / imageWidth, yRange / imageHeight);
+
+        // 調用後端 API 獲取剖面數據
+        // 注意：後端期待座標格式為 (y, x)，所以需要調換順序
+        const result = await AnalysisService.getLineProfile(
+          props.imageRawData,
+          [startPixelY, startPixelX],
+          [endPixelY, endPixelX],
+          physicalScale,
+          false // shiftZero
+        );
+        
+        if (result && result.success && result.profile_data) {
+          // 轉換數據格式
+          const profileDataFormatted = result.profile_data.distance.map((dist: number, index: number) => ({
+            distance: dist,
+            height: result.profile_data.height[index]
+          }));
+          
+          // 更新 lineProfileStore 中的剖面數據
+          lineProfileStore.setProfileData(profileDataFormatted);
+        }
+      } catch (error) {
+        // 忽略即時更新的錯誤，避免過多的錯誤訊息
+        console.debug("即時剖面數據更新失敗:", error);
       }
     };
 
@@ -651,9 +735,16 @@ export default defineComponent({
 
         lineProfileStore.updateHoverData(hoverData);
         
-        // 如果正在選擇終點，更新臨時線段
+        // 如果正在選擇終點，更新臨時線段和即時剖面數據
         if (lineProfileStore.lineProfileMeasureState === LineProfileState.SELECTING_END) {
           updateFollowingLine();
+          
+          // 即時更新剖面數據
+          fetchRealtimeProfileData({
+            x: point.x,
+            y: point.y,
+            z: point.z
+          });
         }
       }
     };
@@ -778,8 +869,24 @@ export default defineComponent({
         // 進入測量模式
         console.log("進入測量模式");
         
-        // 這裡可以禁用或修改某些 Plotly 功能，避免與測量模式衝突
-        // 如果需要禁用 Plotly 默認交互，可以在這裡添加相關代碼
+        // 確保 Plotly 事件監聽器重新設置
+        if (plotlyInstance) {
+          // 移除舊的監聽器（如果存在）
+          plotlyInstance.removeListener('plotly_hover', handlePlotlyHover);
+          plotlyInstance.removeListener('plotly_unhover', handlePlotlyUnhover);
+          plotlyInstance.removeListener('plotly_click', handlePlotlyClick);
+          
+          // 重新設置事件監聽器
+          setupPlotlyEvents();
+        }
+        
+        // 確保圖表可以互動
+        if (plotlyInstance) {
+          Plotly.relayout(plotlyInstance, {
+            dragmode: 'pan', // 確保可以拖拽
+            hovermode: 'closest' // 確保 hover 正常
+          });
+        }
       } else {
         // 退出測量模式
         console.log("退出測量模式");
