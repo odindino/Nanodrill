@@ -51,10 +51,10 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed, watch, onMounted } from 'vue';
-import SideBar from '@/components/SideBar.vue';
-import FileSelector from '@/components/FileSelector.vue';
-import DataView from '@/components/DataView.vue';
-import AnalysisView from '@/components/AnalysisView.vue';
+import SideBar from '@/components/legacy/SideBar.vue';
+import FileSelector from '@/components/legacy/FileSelector.vue';
+import DataView from '@/components/legacy/DataView.vue';
+import AnalysisView from '@/components/legacy/AnalysisView.vue';
 import { useSpmDataStore } from './stores/spmDataStore';
 import { useUserPreferencesStore } from './stores/userPreferencesStore';
 

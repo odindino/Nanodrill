@@ -61,8 +61,8 @@
 
 <script lang="ts">
 import { defineComponent, computed } from 'vue';
-import { useSpmDataStore } from '../stores/spmDataStore';
-import { useAnalysisStore } from '../stores/analysisStore';
+import { useSpmDataStore } from '../../stores/spmDataStore';
+import { useAnalysisStore } from '../../stores/analysisStore';
 import FileSelectorPanel from './analysis/FileSelectorPanel.vue';
 import ToolsPanel from './analysis/ToolsPanel.vue';
 import AnalysisTabs from './analysis/AnalysisTabs.vue';

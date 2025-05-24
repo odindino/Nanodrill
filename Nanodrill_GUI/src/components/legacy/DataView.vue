@@ -201,8 +201,8 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed } from 'vue';
-import { useSpmDataStore } from '../stores/spmDataStore';
-import type { FileInfo } from '../stores/spmDataStore';
+import { useSpmDataStore } from '../../stores/spmDataStore';
+import type { FileInfo } from '../../stores/spmDataStore';
 
 export default defineComponent({
   name: 'DataView',

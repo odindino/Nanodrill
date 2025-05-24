@@ -162,14 +162,16 @@ class AnalysisService:
             # 檔案名稱 (只取基本名稱)
             base_filename = os.path.basename(file_path)
             
-            # 生成預覽圖像 (仍保留以相容性)
-            logger.info(f"開始生成預覽圖")
+            # 在 backend/core/analysis_service.py 中找到 analyze_int_file 方法，並確保以下部分正確實現：
+
+            # 生成預覽圖像時正確使用colormap
+            logger.info(f"開始生成預覽圖，使用colormap: {colormap}")
             fig, ax = plt.subplots(figsize=(8, 6), dpi=100)
-            
+
             # 創建X和Y坐標網格，用掃描範圍而不是像素數
             x = np.linspace(0, x_scan_range, x_pixels)
             y = np.linspace(0, y_scan_range, y_pixels)
-            
+
             # 畫出圖像，並設置正確的X和Y軸範圍
             # 將colormap轉換為matplotlib支援的格式
             try:
@@ -177,23 +179,25 @@ class AnalysisService:
                 if colormap.endswith('_r'):
                     base_colormap = colormap[:-2]
                     im = ax.imshow(image_data, cmap=f'{base_colormap}_r', extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
+                    logger.info(f"使用反向colormap: {base_colormap}_r")
                 else:
                     im = ax.imshow(image_data, cmap=colormap, extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
+                    logger.info(f"使用colormap: {colormap}")
             except Exception as e:
                 logger.warning(f"使用 colormap {colormap} 失敗，回退至 Oranges: {str(e)}")
                 im = ax.imshow(image_data, cmap='Oranges', extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
-            
+
             # 設置軸標籤
             ax.set_xlabel(f'X ({phys_unit})')
             ax.set_ylabel(f'Y ({phys_unit})')
-            
+
             # 設置標題 (只使用檔案名)
             ax.set_title(base_filename)
-            
+
             # 設置colorbar
             cbar = plt.colorbar(im, ax=ax)
             cbar.set_label(f'Height ({phys_unit})')
-            
+
             # 將圖像轉為 base64 字符串
             buf = io.BytesIO()
             fig.tight_layout()
@@ -201,7 +205,7 @@ class AnalysisService:
             buf.seek(0)
             img_data = buf.read()
             img_size = len(img_data)
-            logger.info(f"預覽圖生成成功，大小: {img_size} bytes")
+            logger.info(f"預覽圖生成成功，大小: {img_size} bytes，使用colormap: {colormap}")
             img_base64 = base64.b64encode(img_data).decode('utf-8')
             buf.close()
             plt.close(fig)

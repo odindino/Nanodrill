@@ -378,8 +378,8 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import { useSpmDataStore } from '../stores/spmDataStore';
-import { useUserPreferencesStore } from '../stores/userPreferencesStore';
+import { useSpmDataStore } from '../../stores/spmDataStore';
+import { useUserPreferencesStore } from '../../stores/userPreferencesStore';
 
 interface FileInfo {
   name: string;
