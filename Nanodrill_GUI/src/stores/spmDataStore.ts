@@ -277,6 +277,23 @@ export const useSpmDataStore = defineStore('spmData', {
           }
         }
       }
-    }
+    },
+
+    // 更新標籤頁數據
+    updateTabData(tabId: string, newData: Record<string, any>) {
+      const tabIndex = this.analysisTabs.findIndex(tab => tab.id === tabId);
+      
+      if (tabIndex !== -1) {
+        // 更新標籤頁
+        this.analysisTabs[tabIndex] = {
+          ...this.analysisTabs[tabIndex],
+          ...newData
+        };
+        
+        console.log(`標籤頁 ${tabId} 數據已更新:`, newData);
+      } else {
+        console.warn(`找不到標籤頁 ${tabId}`);
+      }
+    },
   }
 });

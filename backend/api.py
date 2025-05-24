@@ -147,8 +147,8 @@ class NanodrillAPI:
             logger.error(f"獲取 TXT 檔案內容時出錯: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def get_int_file_preview(self, txt_file_path):
-        """為預覽獲取與 txt 檔案相關聯的 TopoFwd.int 檔案圖像"""
+    def get_int_file_preview(self, txt_file_path, colormap="Oranges"):
+        """為預覽獲取與 txt 檔案相關聯的 TopoFwd.int 檔案圖像，並使用指定的色彩映射"""
         try:
             # 檢查 txt 檔案是否存在
             logger.info(f"[預覽] 嘗試預覽檔案: {txt_file_path}")
@@ -201,10 +201,10 @@ class NanodrillAPI:
                     "parameters": parameters
                 }
                 
-                logger.info(f"開始生成預覽圖，scale: {file_info['scale']}, unit: {file_info['physUnit']}")
+                logger.info(f"開始生成預覽圖，scale: {file_info['scale']}, unit: {file_info['physUnit']}, colormap: {colormap}")
                 
                 # 調用 AnalysisService 處理 INT 檔案
-                preview_result = AnalysisService.analyze_int_file(topo_file["path"], file_info)
+                preview_result = AnalysisService.analyze_int_file(topo_file["path"], file_info, colormap)
                 
                 return preview_result
                 
@@ -220,7 +220,7 @@ class NanodrillAPI:
             logger.error(traceback.format_exc())
             return {"success": False, "error": f"獲取預覽圖時發生錯誤: {str(e)}"}
 
-    def analyze_int_file_api(self, int_file_path, txt_file_path=None):
+    def analyze_int_file_api(self, int_file_path, txt_file_path=None, colormap="Oranges"):
         """分析指定的 INT 檔案，可選提供相關的 TXT 檔案路徑獲取參數"""
         try:
             # 檢查 INT 檔案是否存在
@@ -298,8 +298,8 @@ class NanodrillAPI:
             }
             
             # 使用 AnalysisService 來處理 .int 檔案分析
-            logger.info(f"開始分析 INT 檔案，scale: {scale}, unit: {phys_unit}")
-            return AnalysisService.analyze_int_file(int_file_path, file_info)
+            logger.info(f"開始分析 INT 檔案，scale: {scale}, unit: {phys_unit}, colormap: {colormap}")
+            return AnalysisService.analyze_int_file(int_file_path, file_info, colormap)
             
         except Exception as e:
             logger.error(f"分析 INT 檔案時出錯: {str(e)}")
@@ -307,11 +307,11 @@ class NanodrillAPI:
             logger.error(traceback.format_exc())
             return {"success": False, "error": f"分析 INT 檔案時發生錯誤: {str(e)}"}
             
-    def analyze_int_file(self, file_path, parent_file_info=None):
-        """分析 .int 檔案"""
+    def analyze_int_file(self, file_path, parent_file_info=None, colormap="Oranges"):
+        """分析 .int 檔案，使用指定的色彩映射"""
         try:
             # 呼叫 AnalysisService 來處理 .int 檔案分析
-            return AnalysisService.analyze_int_file(file_path, parent_file_info)
+            return AnalysisService.analyze_int_file(file_path, parent_file_info, colormap)
         except Exception as e:
             logger.error(f"分析 INT 檔案時出錯: {str(e)}")
             return {"success": False, "error": str(e)}
@@ -517,74 +517,7 @@ class NanodrillAPI:
             logger.error(f"獲取剖面失敗: {str(e)}")
             return {"success": False, "error": str(e)}
         
-    def analyze_int_file_api(self, int_file_path, txt_file_path=None):
-        """分析指定的 INT 檔案，可選提供相關的 TXT 檔案路徑獲取參數"""
-        try:
-            # 檢查 INT 檔案是否存在
-            logger.info(f"[分析] 嘗試分析檔案: {int_file_path}")
-            if not os.path.exists(int_file_path):
-                logger.error(f"檔案不存在: {int_file_path}")
-                return {"success": False, "error": f"檔案不存在: {int_file_path}"}
-            
-            # 檢查檔案副檔名
-            _, ext = os.path.splitext(int_file_path)
-            logger.info(f"檔案副檔名: {ext}")
-            
-            if ext.lower() != '.int':
-                return {"success": False, "error": f"檔案類型必須是 .int 而不是 {ext}"}
-            
-            # 如果提供了 txt 檔案路徑，則從中獲取參數
-            parameters = {}
-            if txt_file_path and os.path.exists(txt_file_path):
-                try:
-                    with open(txt_file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                    parameters = self._parse_txt_parameters(content)
-                    logger.info(f"從 TXT 檔案 {txt_file_path} 獲取參數")
-                except Exception as e:
-                    logger.warning(f"無法解析 TXT 檔案 {txt_file_path}: {str(e)}")
-            
-            # 從檔案描述中尋找本 int 檔的比例尺
-            scale = None
-            phys_unit = "nm"
-            
-            if "FileDescriptions" in parameters:
-                int_filename = os.path.basename(int_file_path)
-                for desc in parameters["FileDescriptions"]:
-                    if "FileName" in desc and desc["FileName"] == int_filename:
-                        if "Scale" in desc:
-                            try:
-                                scale = float(desc["Scale"])
-                                logger.info(f"從 TXT 檔案找到比例尺: {scale}")
-                            except (ValueError, TypeError):
-                                logger.warning(f"無法轉換比例尺: {desc['Scale']}")
-                        
-                        if "PhysUnit" in desc:
-                            phys_unit = desc["PhysUnit"]
-                            logger.info(f"從 TXT 檔案找到物理單位: {phys_unit}")
-                        
-                        break
-            
-            # 獲取像素數量
-            x_pixel = int(parameters.get("xPixel", 512))
-            y_pixel = int(parameters.get("yPixel", 512))
-            
-            # 準備檔案資訊
-            file_info = {
-                "scale": scale,
-                "physUnit": phys_unit,
-                "parameters": parameters
-            }
-            
-            # 使用 AnalysisService 來處理 .int 檔案分析
-            logger.info(f"開始分析 INT 檔案，scale: {scale}, unit: {phys_unit}")
-            return self.analyze_int_file(int_file_path, file_info)
-            
-        except Exception as e:
-            logger.error(f"分析 INT 檔案時出錯: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return {"success": False, "error": f"分析 INT 檔案時發生錯誤: {str(e)}"}
+    # analyze_int_file_api 方法已在前方定義，此處刪除重複的方法
         
     def update_profile(self, profile_data, shift_zero=False, auto_scale=True, show_peaks=False, peak_sensitivity=1.0):
         """更新剖面圖設置"""

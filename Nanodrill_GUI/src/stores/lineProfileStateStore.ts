@@ -151,7 +151,8 @@ export const useLineProfileStateStore = defineStore('lineProfileState', {
       
       if (targetProfileViewerId) {
         this.targetProfileViewerId = targetProfileViewerId;
-        this.preserveActiveViewerId = targetProfileViewerId;
+        // 修復：在測量模式下，保持 ImageViewer 為活動視圖以便互動
+        this.preserveActiveViewerId = viewerId; // 應該保持 ImageViewer 活動，而不是 ProfileViewer
       } else {
         this.targetProfileViewerId = null;
         this.preserveActiveViewerId = '';

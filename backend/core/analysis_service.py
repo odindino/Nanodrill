@@ -17,7 +17,7 @@ class AnalysisService:
     """提供各種數據分析的服務類"""
     
     @staticmethod
-    def analyze_int_file(file_path, file_info=None):
+    def analyze_int_file(file_path, file_info=None, colormap="Oranges"):
         """分析 .int 檔案並回傳圖像數據和原始數據"""
         try:
             if not os.path.exists(file_path):
@@ -171,7 +171,17 @@ class AnalysisService:
             y = np.linspace(0, y_scan_range, y_pixels)
             
             # 畫出圖像，並設置正確的X和Y軸範圍
-            im = ax.imshow(image_data, cmap='Oranges', extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
+            # 將colormap轉換為matplotlib支援的格式
+            try:
+                # 如果以_r結尾，表示反向色彩映射
+                if colormap.endswith('_r'):
+                    base_colormap = colormap[:-2]
+                    im = ax.imshow(image_data, cmap=f'{base_colormap}_r', extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
+                else:
+                    im = ax.imshow(image_data, cmap=colormap, extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
+            except Exception as e:
+                logger.warning(f"使用 colormap {colormap} 失敗，回退至 Oranges: {str(e)}")
+                im = ax.imshow(image_data, cmap='Oranges', extent=[0, x_scan_range, 0, y_scan_range], origin='lower')
             
             # 設置軸標籤
             ax.set_xlabel(f'X ({phys_unit})')

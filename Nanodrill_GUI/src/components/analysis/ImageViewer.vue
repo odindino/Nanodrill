@@ -15,7 +15,7 @@
           class="p-1 rounded hover:bg-gray-200 text-gray-600 focus:outline-none"
           title="關閉"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -83,6 +83,7 @@ import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount } fro
 import type { PropType } from 'vue';
 import Plotly from 'plotly.js-dist-min';
 import { useLineProfileStateStore, LineProfileState } from '../../stores/lineProfileStateStore';
+import { useSpmDataStore } from '../../stores/spmDataStore'; // 新增匯入
 import type { Point, HoverData } from '../../stores/lineProfileStateStore';
 import type { ImageStats, Dimensions } from '../../types/analysisTypes';
 import { AnalysisService } from '../../services/analysisService';  // 新增匯入
@@ -116,7 +117,7 @@ export default defineComponent({
     },
     colormap: {
       type: String,
-      default: 'Oranges'
+      default: 'Blues'
     },
     zScale: {
       type: Number,
@@ -166,7 +167,7 @@ export default defineComponent({
       default: null
     }
   },
-  emits: ['update:colormap', 'update:zScale', 'line-profile', 'close', 'click', 'measure-completed'],
+  emits: ['update:colormap', 'update:zScale', 'update:loading', 'line-profile', 'close', 'click', 'measure-completed'],
   setup(props, { emit }) {
     console.log(`ImageViewer ${props.id} 初始化，測量模式: ${props.profileMeasureMode}`);
     
@@ -191,6 +192,90 @@ export default defineComponent({
     const formatNumber = (value: number) => {
       if (value === undefined || value === null) return 'N/A';
       return value.toFixed(2);
+    };
+
+    // 處理 colormap 名稱映射 - 將 matplotlib colormap 轉換為 Plotly colorscale
+    const getPlotlyColorscale = (colormap: string) => {
+      // Matplotlib colormap 到 Plotly colorscale 的映射
+      const colormapMapping: { [key: string]: string } = {
+        // 橘色系列
+        'Oranges': 'Oranges',
+        'Oranges_r': 'OrRd',
+        // 藍色系列  
+        'Blues': 'Blues',
+        'Blues_r': 'Blues',
+        // 其他常用色彩映射
+        'Reds': 'Reds',
+        'Reds_r': 'Reds',
+        'Greens': 'Greens',
+        'Greens_r': 'Greens',
+        'Greys': 'Greys',
+        'Greys_r': 'Greys',
+        'Purples': 'Purples',
+        'Purples_r': 'Purples',
+        'YlOrRd': 'YlOrRd',
+        'YlOrRd_r': 'YlOrRd',
+        'YlGnBu': 'YlGnBu',
+        'YlGnBu_r': 'YlGnBu',
+        'RdYlBu': 'RdYlBu',
+        'RdYlBu_r': 'RdYlBu',
+        'Spectral': 'Spectral',
+        'Spectral_r': 'Spectral',
+        'Viridis': 'Viridis',
+        'Viridis_r': 'Viridis',
+        'Plasma': 'Plasma',
+        'Plasma_r': 'Plasma',
+        'Inferno': 'Inferno',
+        'Inferno_r': 'Inferno',
+        'Magma': 'Magma',
+        'Magma_r': 'Magma',
+        'Cividis': 'Cividis',
+        'Cividis_r': 'Cividis'
+      };
+      
+      // 檢查是否是反轉的 colormap
+      const isReversed = colormap.endsWith('_r');
+      let plotlyColorscale = colormapMapping[colormap] || 'Viridis';
+      
+      // 對於反轉的 colormap，我們需要創建反轉的 colorscale
+      if (isReversed) {
+        const baseColormap = colormap.slice(0, -2);
+        const baseplotlyColorscale = colormapMapping[baseColormap] || 'Viridis';
+        
+        // 對於反轉，我們可以使用 Plotly 的內建反轉功能
+        // 或者手動創建反轉的 colorscale
+        if (baseplotlyColorscale === 'Blues') {
+          // 手動創建反轉的藍色系列
+          return [
+            [0, '#08306b'],
+            [0.125, '#08519c'], 
+            [0.25, '#2171b5'],
+            [0.375, '#4292c6'],
+            [0.5, '#6baed6'],
+            [0.625, '#9ecae1'],
+            [0.75, '#c6dbef'],
+            [0.875, '#deebf7'],
+            [1, '#f7fbff']
+          ];
+        } else if (baseplotlyColorscale === 'Oranges') {
+          // 手動創建反轉的橘色系列
+          return [
+            [0, '#7f2704'],
+            [0.125, '#a63603'],
+            [0.25, '#cc4c02'],
+            [0.375, '#ec7014'],
+            [0.5, '#fe9929'],
+            [0.625, '#fec44f'],
+            [0.75, '#fee391'],
+            [0.875, '#fff2cc'],
+            [1, '#fff5eb']
+          ];
+        }
+        
+        return baseplotlyColorscale;
+      }
+      
+      return plotlyColorscale;
     };
 
     // 添加關閉視圖的方法
@@ -247,7 +332,7 @@ export default defineComponent({
           x: x,
           y: y,
           type: 'heatmap' as const,
-          colorscale: props.colormap || 'Oranges',
+          colorscale: getPlotlyColorscale(props.colormap || 'Blues'),
           showscale: true,
           zauto: false,  // 禁用自動 z 範圍，這樣我們可以設置 zmin 和 zmax
           zmin: zMin,
@@ -291,6 +376,7 @@ export default defineComponent({
           yaxis: {
             title: `Y (${props.physUnit})`,
             scaleanchor: 'x',
+            scaleratio: 1,
             constrain: 'domain',
             showgrid: true,
             gridcolor: '#e5e5e5',
@@ -362,7 +448,7 @@ export default defineComponent({
     
     // 更新 Plotly 圖表
     const updatePlotlyChart = () => {
-      console.log("更新 Plotly 圖表");
+      console.log("更新 Plotly 圖表，當前 colormap:", props.colormap);
       
       if (!props.imageRawData || !plotlyInstance) {
         console.warn("缺少必要數據或實例，無法更新圖表");
@@ -394,39 +480,22 @@ export default defineComponent({
           zMax
         ];
         
-        // 更新數據和顏色映射
-        const updateData = {
-          z: [props.imageRawData],
-          colorscale: props.colormap || 'Oranges',
-          zmin: zMin,
-          zmax: zMax,
-          colorbar: {
-            tickvals: colorbarTicks,
-            ticktext: colorbarTicks.map(val => val.toFixed(2))
-          }
-        } as any;
+        // 獲取正確的顏色映射
+        const newColorscale = getPlotlyColorscale(props.colormap || 'Blues');
+        console.log("應用的 colorscale:", newColorscale);
         
-        Plotly.update(plotlyInstance, updateData, {}, [0]);
+        // 強制重新創建圖表以確保顏色映射正確更新
+        // 對於自定義顏色映射，Plotly.update 有時無法正確處理
+        if (plotlyContainer.value) {
+          // 清除現有圖表
+          Plotly.purge(plotlyContainer.value);
+          plotlyInstance = null;
+          
+          // 重新創建圖表
+          createPlotlyChart();
+        }
         
-        // 更新軸範圍以確保顯示完整刻度
-        const { xRange, yRange } = props.dimensions;
-        
-        Plotly.relayout(plotlyInstance, {
-          'xaxis': {
-            range: [0, xRange],
-            dtick: xRange / 5,
-            tickmode: 'linear',
-            tick0: 0
-          },
-          'yaxis': {
-            range: [0, yRange],
-            dtick: yRange / 5,
-            tickmode: 'linear',
-            tick0: 0
-          }
-        });
-        
-        console.log("Plotly 圖表更新成功");
+        console.log("Plotly 圖表重新創建完成");
       } catch (error) {
         console.error("更新 Plotly 圖表時出錯:", error);
       }
@@ -770,7 +839,8 @@ export default defineComponent({
       console.log("當前測量狀態:", lineProfileStore.lineProfileMeasureState);
       
       if (!props.profileMeasureMode) {
-        console.log("非測量模式，忽略點擊");
+        console.log("非測量模式，允許正常的圖表互動");
+        // 在非測量模式下，讓 Plotly 處理默認的點擊行為（縮放、平移等）
         return;
       }
       
@@ -900,10 +970,67 @@ export default defineComponent({
     });
     
     // 監視 colormap 屬性變化
-    watch(() => props.colormap, (newColormap) => {
+    watch(() => props.colormap, async (newColormap) => {
       console.log(`ImageViewer ${props.id} colormap 變更為:`, newColormap);
-      if (plotlyInstance && newColormap) {
-        updatePlotlyChart();
+      
+      // 獲取當前標籤頁信息以取得文件路徑
+      try {
+        // 獲取所有父組件傳入的數據，以查找當前圖像對應的文件路徑
+        const spmDataStore = useSpmDataStore();
+        const location = spmDataStore.getViewerLocation(props.id);
+        
+        if (location) {
+          const { tabId } = location;
+          const tab = spmDataStore.analysisTabs.find(t => t.id === tabId);
+          
+          if (tab && tab.fileId) {
+            console.log(`正在使用新的 colormap [${newColormap}] 重新請求圖像數據, 文件: ${tab.fileId}`);
+            
+            // 設置載入狀態
+            emit('update:loading', true);
+            
+            try {
+              // 使用 AnalysisService.loadIntFile 重新獲取圖像數據
+              const result = await AnalysisService.loadIntFile(tab.fileId, newColormap);
+              
+              if (result && result.success) {
+                console.log('從後端獲取到新的圖像數據，使用新的 colormap:', newColormap);
+                
+                // 更新圖像數據，這會自動觸發 imageRawData 的 watcher
+                spmDataStore.updateTabData(tabId, {
+                  imageRawData: result.rawData,
+                  imageData: result.image,
+                  statistics: result.statistics
+                });
+                
+                // 如果 plotlyInstance 存在，會在 imageRawData 的 watcher 中更新圖表
+              } else {
+                console.error('獲取新圖像數據失敗:', result?.error || '未知錯誤');
+              }
+            } catch (error) {
+              console.error('請求新圖像數據時出錯:', error);
+            } finally {
+              // 無論成功或失敗，都關閉載入狀態
+              emit('update:loading', false);
+            }
+          } else {
+            console.warn('無法找到當前標籤頁或文件路徑不存在，使用本地繪製');
+            if (plotlyInstance && newColormap) {
+              updatePlotlyChart();
+            }
+          }
+        } else {
+          console.warn('無法定位當前圖像位置，使用本地繪製');
+          if (plotlyInstance && newColormap) {
+            updatePlotlyChart();
+          }
+        }
+      } catch (error) {
+        console.error('處理 colormap 變化時發生錯誤:', error);
+        // 發生錯誤時，仍嘗試使用本地方法繪製
+        if (plotlyInstance && newColormap) {
+          updatePlotlyChart();
+        }
       }
     });
     

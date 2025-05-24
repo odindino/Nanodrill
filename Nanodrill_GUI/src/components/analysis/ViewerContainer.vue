@@ -37,6 +37,7 @@
             :isActive="isViewerActive(viewer.id)"
             @click.stop="activateViewer(index)"
             @close="removeViewer(index)"
+            @measure-completed="handleMeasureCompleted"
           />
         </div>
       </template>
@@ -114,10 +115,8 @@ export default defineComponent({
       
       const viewer = props.viewers[index];
       
-      // 如果當前視圖是 ImageViewer 且處於剖面測量模式，則不切換活動視圖
-      if (viewer.component === 'ImageViewer' && viewer.props.profileMeasureMode) {
-        return;
-      }
+      // 修復：移除阻止 ImageViewer 在測量模式下被激活的邏輯
+      // ImageViewer 在測量模式下應該保持可互動
       
       // 設置活動視圖
       analysisStore.setActiveViewer(viewer.id);
@@ -173,13 +172,21 @@ export default defineComponent({
     const isViewerActive = (viewerId: string) => {
       return analysisStore.activeViewerId === viewerId;
     };
+
+    // 處理測量完成事件
+    const handleMeasureCompleted = (data: any) => {
+      console.log("ViewerContainer: 收到測量完成事件", data);
+      // 委託給 analysisStore 處理
+      analysisStore.handleLineProfile(data);
+    };
     
     return {
       gridRowHeight,
       activateContainer,
       activateViewer,
       removeViewer,
-      isViewerActive
+      isViewerActive,
+      handleMeasureCompleted
     };
   }
 });

@@ -12,15 +12,24 @@
       <!-- 線性剖面測量按鈕 -->
       <div class="mt-3 space-y-2">
         <button 
+          v-if="!isSourceViewerMeasuring"
           @click="startLineProfileMeasurement"
           class="w-full py-1.5 px-2 text-xs font-medium rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary"
-          :class="{ 'bg-primary-100 border-primary-300': isSourceViewerMeasuring }"
         >
-          {{ isSourceViewerMeasuring ? '正在測量中...' : '線性剖面測量' }}
+          線性剖面測量
         </button>
         
-        <div v-if="isSourceViewerMeasuring" class="p-2 text-xs bg-blue-50 text-blue-600 rounded border border-blue-200">
-          請在影像上點擊設置測量點。點擊後將自動繪製剖面線。
+        <div v-else class="space-y-2">
+          <button 
+            @click="endLineProfileMeasurement"
+            class="w-full py-1.5 px-2 text-xs font-medium rounded border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 focus:outline-none focus:ring-1 focus:ring-red-500"
+          >
+            結束測量模式
+          </button>
+          
+          <div class="p-2 text-xs bg-blue-50 text-blue-600 rounded border border-blue-200">
+            請在影像上點擊設置測量點。點擊後將自動繪製剖面線。
+          </div>
         </div>
       </div>
     </div>
@@ -89,15 +98,28 @@ export default defineComponent({
       // 切換源影像的測量模式
       analysisStore.toggleMeasureMode(sourceViewerId.value, props.viewer.id);
       
-      // 確保當前活動視圖保持為 ProfileViewer
-      analysisStore.setActiveViewer(props.viewer.id);
+      // 在測量模式下，保持 ImageViewer 為活動視圖以便互動
+      analysisStore.setActiveViewer(sourceViewerId.value);
+    };
+    
+    // 結束線性剖面測量
+    const endLineProfileMeasurement = () => {
+      if (!sourceViewerId.value) return;
+      
+      // 關閉源影像的測量模式
+      analysisStore.toggleMeasureMode(sourceViewerId.value);
+      
+      // 修復：測量結束後，允許正常的視圖切換，不強制設置活動視圖
+      // 讓用戶自然地點擊想要的視圖來切換活動狀態
+      console.log('線性剖面測量已結束');
     };
     
     return {
       hasSourceViewer,
       sourceViewerTitle,
       isSourceViewerMeasuring,
-      startLineProfileMeasurement
+      startLineProfileMeasurement,
+      endLineProfileMeasurement
     };
   }
 });

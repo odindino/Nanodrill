@@ -197,10 +197,19 @@ export const useAnalysisStore = defineStore('analysis', {
     setActiveViewer(viewerId: string) {
       const lineProfileStore = useLineProfileStateStore();
       
-      // 如果在測量模式下且有指定要保持的活動視圖，則使用保持的活動視圖
-      if (lineProfileStore.measureMode && lineProfileStore.preserveActiveViewerId) {
-        this.activeViewerId = lineProfileStore.preserveActiveViewerId;
+      // 修復：只有在測量模式下且用戶沒有明確點擊其他視圖時，才使用 preserveActiveViewerId
+      // 如果用戶明確點擊了某個視圖，應該尊重用戶的選擇
+      if (lineProfileStore.measureMode && lineProfileStore.preserveActiveViewerId && 
+          viewerId === lineProfileStore.preserveActiveViewerId) {
+        // 用戶點擊了被保持的視圖，正常設置
+        this.activeViewerId = viewerId;
+      } else if (lineProfileStore.measureMode && lineProfileStore.preserveActiveViewerId && 
+                 viewerId !== lineProfileStore.preserveActiveViewerId) {
+        // 用戶點擊了其他視圖，允許切換但保持測量狀態
+        this.activeViewerId = viewerId;
+        console.log(`測量模式下允許視圖切換: ${lineProfileStore.preserveActiveViewerId} -> ${viewerId}`);
       } else {
+        // 非測量模式或沒有保持設置，正常切換
         this.activeViewerId = viewerId;
       }
     },
@@ -305,9 +314,10 @@ export const useAnalysisStore = defineStore('analysis', {
       const lineProfileStore = useLineProfileStateStore();
       lineProfileStore.handleMeasureCompleted(data);
       
-      // 關閉測量模式
+      // 關閉測量模式並重置狀態
       lineProfileStore.measureMode = false;
       lineProfileStore.currentMeasuringViewerId = '';
+      lineProfileStore.preserveActiveViewerId = ''; // 重置保持活動視圖的ID
     },
     
     /**
@@ -456,7 +466,7 @@ export const useAnalysisStore = defineStore('analysis', {
         };
         
         // 單容器模式: 將所有視圖添加到同一個容器中
-        // 將所有現有視圖設為非活動
+        // 在測量模式下，保持 ImageViewer 為活動狀態，以便互動
         const updatedViewers = sourceGroup.viewers.map((viewer, idx) => {
           if (idx === viewerIndex) {
             // 為源 ImageViewer 添加指向 ProfileViewer 的綁定
@@ -464,7 +474,7 @@ export const useAnalysisStore = defineStore('analysis', {
               ...viewer,
               props: {
                 ...viewer.props,
-                isActive: false,
+                isActive: true,  // 保持活動狀態以便測量時互動
                 linkedProfileViewerId: profileViewerId,  // 添加綁定關係
                 profileMeasureMode: true,  // 啟用測量模式
                 targetProfileViewer: { id: profileViewerId }  // 設置目標 ProfileViewer
@@ -504,8 +514,9 @@ export const useAnalysisStore = defineStore('analysis', {
       // 啟動測量模式
       this.toggleMeasureMode(sourceViewerId, profileViewerId);
       
-      // 更新活動視圖ID
-      this.activeViewerId = profileViewerId;
+      // 修復：確保在測量模式下，ImageViewer 保持為活動視圖以便互動
+      // 不要在這裡強制設置 activeViewerId，讓 setActiveViewer 根據 preserveActiveViewerId 處理
+      console.log(`測量模式已啟動，當前活動視圖: ${this.activeViewerId}`);
       
       return profileViewerId;
     },

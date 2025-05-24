@@ -7,11 +7,12 @@ export class AnalysisService {
     /**
      * 載入 INT 文件
      * @param filePath INT 文件路徑
+     * @param colormap 色彩映射名稱
      * @returns 返回分析結果
      */
-    static async loadIntFile(filePath: string) {
+    static async loadIntFile(filePath: string, colormap?: string) {
       try {
-        return await window.pywebview.api.analyze_int_file_api(filePath);
+        return await window.pywebview.api.analyze_int_file_api(filePath, undefined, colormap);
       } catch (error) {
         console.error('載入 INT 文件失敗:', error);
         throw error;

@@ -2,3 +2,4 @@ pywebview
 plotly
 pandas
 numpy
+matplotlib

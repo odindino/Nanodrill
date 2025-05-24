@@ -104,7 +104,7 @@
         處理中...
       </div>
     </div>
-    
+
     <!-- 顯示設定 -->
     <div>
       <label class="text-xs text-gray-500 block mb-2">顯示設定</label>
@@ -117,24 +117,10 @@
           @change="changeColormap(($event.target as HTMLSelectElement)?.value)"
           class="w-full py-1.5 px-2 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="Viridis">綠藍色 (Viridis)</option>
-          <option value="Plasma">等離子 (Plasma)</option>
-          <option value="Inferno">地獄 (Inferno)</option>
-          <option value="Magma">岩漿 (Magma)</option>
-          <option value="Cividis">色盲友好 (Cividis)</option>
-          <option value="Hot">熱力圖 (Hot)</option>
-          <option value="Jet">彩虹 (Jet)</option>
-          <option value="Rainbow">彩虹2 (Rainbow)</option>
-          <option value="Blackbody">黑體 (Blackbody)</option>
-          <option value="Earth">地球 (Earth)</option>
-          <option value="Electric">電子 (Electric)</option>
-          <option value="YlOrRd">黃橘紅 (YlOrRd)</option>
-          <option value="YlGnBu">黃綠藍 (YlGnBu)</option>
-          <option value="RdYlBu">紅黃藍 (RdYlBu)</option>
-          <option value="Portland">波特蘭 (Portland)</option>
-          <option value="Picnic">野餐 (Picnic)</option>
-          <option value="Blues">藍色 (Blues)</option>
           <option value="Oranges">橘色 (Oranges)</option>
+          <option value="Blues">藍色 (Blues)</option>
+          <option value="Blues_r">藍色反轉 (Blues_r)</option>
+          <option value="Oranges_r">橘色反轉 (Oranges_r)</option>
         </select>
       </div>
 
@@ -194,7 +180,7 @@ export default defineComponent({
     const fineTuneMode = ref(false);
     
     // 顏色映射相關狀態
-    const currentColormap = ref('Oranges');  // 改為預設 Oranges
+    const currentColormap = ref('Oranges');  // 恢復預設 Oranges
     const reverseColormap = ref(false);
     const autoScale = ref(true);
     
@@ -329,18 +315,31 @@ export default defineComponent({
     const changeColormap = (newColormap: string) => {
       if (!newColormap) return;
       
-      // 儲存基礎 colormap 名稱（不含 _r）
-      currentColormap.value = newColormap;
-      
-      // 根據當前反轉狀態構建最終的 colormap 名稱
-      const finalColormap = reverseColormap.value ? `${newColormap}_r` : newColormap;
-      
-      // 更新 viewer 的 colormap 屬性
-      updateViewerProps({
-        colormap: finalColormap
-      });
-      
-      console.log('色彩映射已更新:', '基礎映射:', newColormap, '反轉狀態:', reverseColormap.value, '最終映射:', finalColormap);
+      // 檢查是否是直接的反轉選項（以 _r 結尾）
+      if (newColormap.endsWith('_r')) {
+        // 對於直接選擇的反轉選項，提取基礎名稱並設定反轉狀態
+        const baseColormap = newColormap.slice(0, -2);
+        currentColormap.value = baseColormap;
+        reverseColormap.value = true;
+        
+        // 直接使用選擇的完整名稱
+        updateViewerProps({
+          colormap: newColormap
+        });
+        
+        console.log('直接選擇反轉色彩映射:', '完整映射:', newColormap, '基礎映射:', baseColormap);
+      } else {
+        // 對於基礎選項，儲存基礎名稱並清除反轉狀態
+        currentColormap.value = newColormap;
+        reverseColormap.value = false;
+        
+        // 直接使用選擇的名稱
+        updateViewerProps({
+          colormap: newColormap
+        });
+        
+        console.log('選擇基礎色彩映射:', '基礎映射:', newColormap);
+      }
     };
     
     // 切換反轉色彩映射

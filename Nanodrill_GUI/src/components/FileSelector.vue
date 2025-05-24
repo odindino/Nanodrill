@@ -234,6 +234,9 @@
           <div class="flex-grow flex overflow-hidden">
             <!-- 形貌圖頁面 -->
             <div v-if="activePreviewTab === 'image'" class="flex-grow flex flex-col overflow-hidden">
+              <!-- 已移除 Colormap 控制區域 -->
+              <!-- 已移除重新生成按鈕 -->
+              
               <!-- 圖像顯示區域 -->
               <div class="flex-grow overflow-auto p-4 bg-gray-50">
                 <img v-if="previewImage" 
@@ -432,6 +435,7 @@ export default defineComponent({
     const previewData = ref<any | null>(null);
     const rawContent = ref<string>('');
     const fileDescriptions = ref<FileDescription[]>([]);
+    // 預設色彩映射相關功能已移除
     
     // 預覽標籤頁
     const activePreviewTab = ref<string>('image');
@@ -458,7 +462,7 @@ export default defineComponent({
       return `${date || ''} ${time || ''}`;
     };
     
-    // 檢查是否正在預覽某個檔案
+    // 檢查是否正在預覽某个檔案
     const isPreviewingFile = (file: FileInfo) => {
       return previewFile.value === file.path && showPreviewPanel.value;
     };
@@ -674,7 +678,7 @@ export default defineComponent({
             fileDescriptions.value = txtResult.parameters.FileDescriptions;
           }
           
-          // 獲取預覽圖
+          // 獲取預覽圖，使用選定的色彩映射
           console.log('正在獲取預覽圖，TXT 檔案:', file.path);
           const imgResult = await window.pywebview.api.get_int_file_preview(file.path);
           
@@ -828,6 +832,34 @@ export default defineComponent({
       return value.toFixed(2);
     };
     
+    // 重新生成預覽功能
+    const refreshPreview = async () => {
+      if (!previewFile.value) return;
+      
+      try {
+        previewLoading.value = true;
+        previewError.value = null;
+        
+        console.log('正在重新生成預覽圖');
+        const imgResult = await window.pywebview.api.get_int_file_preview(previewFile.value);
+        
+        if (imgResult.success && imgResult.image) {
+          console.log('預覽圖重新生成成功，大小:', imgResult.image.length);
+          previewImage.value = imgResult.image;
+          previewStats.value = imgResult.statistics;
+          previewUnit.value = imgResult.physUnit || 'nm';
+        } else {
+          console.warn('預覽圖重新生成失敗:', imgResult.error);
+          previewError.value = imgResult.error || '無法重新生成預覽圖';
+        }
+      } catch (error) {
+        console.error('預覽重新生成錯誤:', error);
+        previewError.value = `系統錯誤: ${error}`;
+      } finally {
+        previewLoading.value = false;
+      }
+    };
+
     // 處理ESC鍵關閉預覽面板
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && showPreviewPanel.value) {
@@ -931,7 +963,8 @@ export default defineComponent({
       startResize,
       formatNumber,
       formatDateTime,
-      openFileForAnalysis
+      openFileForAnalysis,
+      refreshPreview
     };
   }
 });

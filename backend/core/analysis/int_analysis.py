@@ -3,6 +3,7 @@ import numpy as np
 import logging
 from scipy import ndimage, fftpack
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import io
 import base64
 import plotly.graph_objects as go
@@ -21,6 +22,91 @@ class IntAnalysis:
     這個類提供各種形貌圖的分析工具，包括平面化、傾斜調整、線性剖面等功能。
     所有方法都設計為不改變原始數據，而是返回處理後的新數據。
     """
+    
+    @staticmethod
+    def get_plotly_colorscale(colormap_name):
+        """
+        獲取適用於Plotly的色彩映射
+        
+        使用matplotlib的色彩映射系統自動生成色彩陣列，支援所有matplotlib內建的色彩映射。
+        處理色彩映射名稱，包括反轉映射（_r結尾）。
+        
+        Args:
+            colormap_name: 色彩映射名稱，支援所有matplotlib colormap，如 'viridis', 'plasma', 'inferno', 
+                          'magma', 'cividis', 'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+                          'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu', 'GnBu', 'PuBu', 'YlGnBu',
+                          'PuBuGn', 'BuGn', 'YlGn', 'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone',
+                          'pink', 'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia', 'hot', 'afmhot',
+                          'gist_heat', 'copper', 'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu',
+                          'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic' 等，
+                          以及反轉版本（加 _r 後綴）
+            
+        Returns:
+            適用於Plotly的色彩映射（色彩陣列或字符串名稱）
+        """
+        try:
+            # 處理反轉映射
+            base_colormap = colormap_name
+            is_reversed = False
+            
+            if colormap_name.endswith('_r'):
+                base_colormap = colormap_name[:-2]
+                is_reversed = True
+            
+            # 檢查是否為有效的matplotlib色彩映射
+            try:
+                # 嘗試獲取matplotlib色彩映射
+                if is_reversed:
+                    cmap = cm.get_cmap(base_colormap + '_r')
+                else:
+                    cmap = cm.get_cmap(base_colormap)
+                
+                # 生成色彩點數組，使用更多採樣點以獲得更平滑的漸變
+                n_colors = 256
+                color_positions = np.linspace(0, 1, n_colors)
+                colors = cmap(color_positions)
+                
+                # 轉換為Plotly格式的色彩陣列
+                plotly_colorscale = []
+                for i, color in enumerate(colors):
+                    # 將顏色從RGBA格式轉換為十六進制
+                    hex_color = '#{:02x}{:02x}{:02x}'.format(
+                        int(color[0] * 255),
+                        int(color[1] * 255),
+                        int(color[2] * 255)
+                    )
+                    plotly_colorscale.append([color_positions[i], hex_color])
+                
+                logger.info(f"成功生成matplotlib色彩映射: {colormap_name}")
+                return plotly_colorscale
+                
+            except (ValueError, KeyError):
+                # 如果不是有效的matplotlib色彩映射，回退到預設映射
+                logger.warning(f"無法找到matplotlib色彩映射: {base_colormap}，回退到預設映射")
+                # 回退到Viridis作為預設
+                cmap = cm.get_cmap('viridis')
+                
+                # 生成色彩點數組
+                n_colors = 256
+                color_positions = np.linspace(0, 1, n_colors)
+                colors = cmap(color_positions)
+                
+                # 轉換為Plotly格式的色彩陣列
+                plotly_colorscale = []
+                for i, color in enumerate(colors):
+                    hex_color = '#{:02x}{:02x}{:02x}'.format(
+                        int(color[0] * 255),
+                        int(color[1] * 255),
+                        int(color[2] * 255)
+                    )
+                    plotly_colorscale.append([color_positions[i], hex_color])
+                
+                return plotly_colorscale
+                    
+        except Exception as e:
+            logger.error(f"生成色彩映射時發生錯誤: {str(e)}")
+            # 回退到默認映射
+            return colormap_name if colormap_name else 'Viridis'
     
     @staticmethod
     def linewise_flatten_mean(image_data):
@@ -322,12 +408,15 @@ class IntAnalysis:
                 x = np.arange(x_size)
                 y = np.arange(y_size)
             
+            # 獲取正確的色彩映射
+            processed_colormap = IntAnalysis.get_plotly_colorscale(colormap)
+            
             # 創建heatmap圖
             fig = go.Figure(data=go.Heatmap(
                 z=image_data,
                 x=x,
                 y=y,
-                colorscale=colormap,
+                colorscale=processed_colormap,
                 colorbar=dict(
                     title=f'Height ({phys_unit})',
                     titleside='right',
