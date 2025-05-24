@@ -240,6 +240,13 @@ export const useSpmDataStore = defineStore('spmData', {
 
     // 更新 viewer 的 props
     updateViewerProps(tabId: string, groupId: string, viewerIndex: number, newProps: Record<string, any>) {
+      console.log('spmDataStore: updateViewerProps 被呼叫:', {
+        tabId,
+        groupId,
+        viewerIndex,
+        newProps
+      });
+      
       const tabIndex = this.analysisTabs.findIndex(tab => tab.id === tabId);
       
       if (tabIndex !== -1) {
@@ -250,6 +257,8 @@ export const useSpmDataStore = defineStore('spmData', {
             const group = tab.viewerGroups[groupIndex];
             if (viewerIndex < group.viewers.length) {
               const viewer = group.viewers[viewerIndex];
+              
+              console.log('spmDataStore: 找到viewer，當前props:', viewer.props);
               
               // 更新 viewer 的 props
               const updatedViewers = [...group.viewers];
@@ -273,9 +282,19 @@ export const useSpmDataStore = defineStore('spmData', {
                 ...tab,
                 viewerGroups: updatedGroups
               };
+              
+              console.log('spmDataStore: viewer props 更新完成，新props:', updatedViewers[viewerIndex].props);
+            } else {
+              console.error('spmDataStore: viewerIndex 超出範圍:', viewerIndex, 'group.viewers.length:', group.viewers.length);
             }
+          } else {
+            console.error('spmDataStore: 找不到群組:', groupId);
           }
+        } else {
+          console.error('spmDataStore: 標籤頁沒有viewerGroups:', tabId);
         }
+      } else {
+        console.error('spmDataStore: 找不到標籤頁:', tabId);
       }
     },
 

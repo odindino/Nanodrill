@@ -12,9 +12,12 @@ export class AnalysisService {
      */
     static async loadIntFile(filePath: string, colormap?: string) {
       try {
-        return await window.pywebview.api.analyze_int_file_api(filePath, undefined, colormap);
+        console.log('AnalysisService: 呼叫 loadIntFile，參數:', { filePath, colormap });
+        const result = await window.pywebview.api.analyze_int_file_api(filePath, undefined, colormap);
+        console.log('AnalysisService: loadIntFile 呼叫完成，結果:', result?.success ? '成功' : '失敗');
+        return result;
       } catch (error) {
-        console.error('載入 INT 文件失敗:', error);
+        console.error('AnalysisService: 載入 INT 文件失敗:', error);
         throw error;
       }
     }
